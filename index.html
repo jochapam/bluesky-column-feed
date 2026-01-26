@@ -22,9 +22,6 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
 
-    // thread modal state
-    
-
     // --- Icons ---
     const ChevronLeft = () => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -113,6 +110,35 @@
       </svg>
     );
 
+    // ---------- Helpers ----------
+    const safe = (v, fallback = '') => (v == null ? fallback : v);
+
+    const runSelfTests = () => {
+      // Very small sanity tests (doesn't affect UI)
+      const assert = (cond, msg) => {
+        if (!cond) console.error('[SelfTest FAILED]', msg);
+      };
+
+      const flattenThread = (node, out, depth = 0) => {
+        if (!node) return;
+        if (node.parent) flattenThread(node.parent, out, Math.min(depth + 1, 6));
+        if (node.post) out.push({ post: node.post, depth });
+        if (Array.isArray(node.replies)) {
+          for (const r of node.replies) {
+            if (!r?.post) continue;
+            out.push({ post: r.post, depth: Math.min(depth + 1, 6) });
+          }
+        }
+      };
+
+      const fake = { post: { uri: 'a' }, replies: [{ post: { uri: 'b' } }, { post: { uri: 'c' } }] };
+      const out = [];
+      flattenThread(fake, out, 0);
+      assert(out.length === 3, 'flattenThread should produce 3 items');
+      assert(out[0].post.uri === 'a', 'flattenThread root first');
+    };
+
+    // ---------- App ----------
     function BlueskyColumnFeed() {
       const [posts, setPosts] = useState([]);
       const [columns, setColumns] = useState([]); // packed columns
@@ -129,46 +155,29 @@
       const [session, setSession] = useState(null);
       const [error, setError] = useState('');
 
-      // --- Thread / replies modal ---
-      const [threadOpen, setThreadOpen] = useState(false);
-      const [threadLoading, setThreadLoading] = useState(false);
-      const [threadError, setThreadError] = useState('');
-      const [threadItems, setThreadItems] = useState([]); // flattened posts
-      const [threadFocusUri, setThreadFocusUri] = useState(null);
-
-      const [threadPost, setThreadPost] = useState(null);
-      const [threadReplies, setThreadReplies] = useState([]);
-      const [threadLoading, setThreadLoading] = useState(false);('');
-
       const COLUMNS_TO_SHOW = 3;
 
       const [sidebarExpanded, setSidebarExpanded] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
+
+      // thread modal
+      const [threadOpen, setThreadOpen] = useState(false);
+      const [threadLoading, setThreadLoading] = useState(false);
+      const [threadError, setThreadError] = useState('');
+      const [threadFocusUri, setThreadFocusUri] = useState(null);
+      const [threadItems, setThreadItems] = useState([]); // flattened
 
       // re-layout trigger
       const [layoutTick, setLayoutTick] = useState(0);
       const measureRefs = useRef([]);
       const rafReflowRef = useRef(null);
 
-      // --- tactile swipe state ---
-      const [dragX, setDragX] = useState(0); // live finger offset
+      // swipe
+      const [dragX, setDragX] = useState(0);
       const [isDragging, setIsDragging] = useState(false);
       const [isAnimating, setIsAnimating] = useState(false);
-
-      const pointerSwipeRef = useRef({
-        active: false,
-        pointerId: null,
-        startX: 0,
-        startY: 0,
-        lastX: 0,
-        lastY: 0,
-      });
-
-      const velocityRef = useRef({
-        v: 0, // px/ms
-        lastX: 0,
-        lastT: 0,
-      });
+      const pointerSwipeRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0 });
+      const velocityRef = useRef({ v: 0, lastX: 0, lastT: 0 });
 
       const bumpLayout = () => {
         if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
@@ -232,6 +241,10 @@
         if (diffHours < 24) return `${diffHours}h`;
         return `${diffDays}d`;
       };
+
+      useEffect(() => {
+        runSelfTests();
+      }, []);
 
       // startup
       useEffect(() => {
@@ -329,74 +342,16 @@
         localStorage.removeItem('bluesky_session');
       };
 
-      const fetchTimeline = async (sess = session) => {
-        if (!sess?.accessJwt) return;
-        setLoading(true);
-        setError('');
-        const base = getPdsBaseUrl(sess);
-
-        const doFetch = async (jwt) =>
-          fetch(`${base}/xrpc/app.bsky.feed.getTimeline?limit=50`, {
-            headers: { Authorization: `Bearer ${jwt}` },
-          });
-
-        try {
-          let resp = await doFetch(sess.accessJwt);
-          if (resp.status === 401) {
-            const newAccess = await refreshAccessToken(sess);
-            if (!newAccess) throw new Error('Session expired. Please sign in again.');
-            resp = await doFetch(newAccess);
-          }
-          if (!resp.ok) {
-            const err = await resp.json().catch(() => null);
-            throw new Error(err?.message ? `${resp.status}: ${err.message}` : `Failed to fetch timeline: ${resp.status}`);
-          }
-          const data = await resp.json();
-          setPosts(data.feed || []);
-          setCurrentColumn(0);
-          setDragX(0);
-          bumpLayout();
-        } catch (err) {
-          setError(`Error loading feed: ${err.message}`);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      const openThread = async (item) => {
-        if (!session) return;
-        setThreadPost(item);
-        setThreadReplies([]);
-        setThreadLoading(true);
-        try {
-          const base = getPdsBaseUrl(session);
-          const resp = await fetch(`${base}/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(item.post.uri)}`, {
-            headers: { Authorization: `Bearer ${session.accessJwt}` },
-          });
-          if (!resp.ok) throw new Error('Failed to load thread');
-          const data = await resp.json();
-          setThreadReplies(data.thread?.replies || []);
-        } catch (e) {
-          setThreadReplies([]);
-        } finally {
-          setThreadLoading(false);
-        }
-      };
-
-      const closeThread = () => {
-        setThreadPost(null);
-        setThreadReplies([]);
-      };
-
-      const refresh = () => {
-        if (session) fetchTimeline(session);
-      };
-
-      const xrpcFetchWithAuth = async (sess, pathWithQuery) => {
+      const xrpcJsonWithAuth = async (sess, pathWithQuery, method = 'GET', body = null) => {
         const base = getPdsBaseUrl(sess);
         const doFetch = async (jwt) =>
           fetch(`${base}${pathWithQuery}`, {
-            headers: { Authorization: `Bearer ${jwt}` },
+            method,
+            headers: {
+              Authorization: `Bearer ${jwt}`,
+              ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
           });
 
         let resp = await doFetch(sess.accessJwt);
@@ -412,69 +367,32 @@
         return resp.json();
       };
 
-      const flattenThread = (node, acc, depth = 0) => {
-        if (!node) return;
-        // parent chain first
-        if (node.parent) flattenThread(node.parent, acc, depth + 1);
-        if (node.post) acc.push({ post: node.post, depth });
-        if (Array.isArray(node.replies)) {
-          for (const r of node.replies) {
-            if (r?.post) {
-              // replies depth is 0 for direct children; indent them slightly
-              acc.push({ post: r.post, depth: 1 });
-              // show grandchildren if present (depth=2)
-              if (Array.isArray(r.replies)) {
-                for (const rr of r.replies) {
-                  if (rr?.post) acc.push({ post: rr.post, depth: 2 });
-                }
-              }
-            }
-          }
-        }
-      };
-
-      const openThread = async (uri) => {
-        if (!session?.accessJwt) return;
-        setThreadOpen(true);
-        setThreadLoading(true);
-        setThreadError('');
-        setThreadItems([]);
-        setThreadFocusUri(uri);
+      const fetchTimeline = async (sess = session) => {
+        if (!sess?.accessJwt) return;
+        setLoading(true);
+        setError('');
         try {
-          const data = await xrpcFetchWithAuth(session, `/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=2&parentHeight=8`);
-          const acc = [];
-          flattenThread(data?.thread, acc, 0);
-          // de-dupe by uri (parent recursion can repeat in odd cases)
-          const seen = new Set();
-          const unique = [];
-          for (const it of acc) {
-            const u = it?.post?.uri;
-            if (!u) continue;
-            if (seen.has(u)) continue;
-            seen.add(u);
-            unique.push(it);
-          }
-          setThreadItems(unique);
-        } catch (e) {
-          setThreadError(e?.message || 'Failed to load thread');
+          const data = await xrpcJsonWithAuth(sess, `/xrpc/app.bsky.feed.getTimeline?limit=50`);
+          setPosts(data.feed || []);
+          setCurrentColumn(0);
+          setDragX(0);
+          bumpLayout();
+        } catch (err) {
+          setError(`Error loading feed: ${err.message}`);
         } finally {
-          setThreadLoading(false);
+          setLoading(false);
         }
       };
 
-      const closeThread = () => {
-        setThreadOpen(false);
-        setThreadLoading(false);
-        setThreadError('');
-        setThreadItems([]);
-        setThreadFocusUri(null);
+      const refresh = () => {
+        if (session) fetchTimeline(session);
       };
 
       // ---- responsive column width ----
       const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64);
-      const GAP_PX = 16; // gap-4
-      const PAD_PX = 16; // p-4
-      const CARD_GAP_PX = 16; // space-y-4
+      const GAP_PX = 16;
+      const PAD_PX = 16;
+      const CARD_GAP_PX = 16;
 
       const columnWidthPx = useMemo(() => {
         const vw = window.innerWidth || 1024;
@@ -493,12 +411,137 @@
 
       const columnViewportHeightPx = useMemo(() => {
         const vh = window.innerHeight || 800;
-        return Math.max(200, vh - 32); // calc(100vh - 2rem)
+        return Math.max(200, vh - 32);
       }, [layoutTick]);
 
       const pageWidthPx = useMemo(() => {
         return columnWidthPx * COLUMNS_TO_SHOW + GAP_PX * (COLUMNS_TO_SHOW - 1);
       }, [columnWidthPx]);
+
+      // ---- swipe + peek ----
+      const totalColumns = columns.length;
+      const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
+
+      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
+      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+      const animateDragTo = (targetDragX, onDone) => {
+        setIsAnimating(true);
+        setDragX(targetDragX);
+        window.setTimeout(() => {
+          setIsAnimating(false);
+          onDone?.();
+        }, 260);
+      };
+
+      const goPrevWithAnimation = () => {
+        if (currentColumn === 0) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+        animateDragTo(pageWidthPx, () => {
+          setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
+          setDragX(0);
+        });
+      };
+
+      const goNextWithAnimation = () => {
+        if (currentColumn >= maxColumnIndex) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+        animateDragTo(-pageWidthPx, () => {
+          setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+          setDragX(0);
+        });
+      };
+
+      const onPointerDown = (e) => {
+        if (e.pointerType === 'mouse') return;
+        if (isAnimating) return;
+
+        pointerSwipeRef.current.active = true;
+        pointerSwipeRef.current.pointerId = e.pointerId;
+        pointerSwipeRef.current.startX = e.clientX;
+        pointerSwipeRef.current.startY = e.clientY;
+        pointerSwipeRef.current.lastX = e.clientX;
+        pointerSwipeRef.current.lastY = e.clientY;
+
+        const now = performance.now();
+        velocityRef.current = { v: 0, lastX: e.clientX, lastT: now };
+
+        setIsDragging(true);
+        setDragX(0);
+
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      };
+
+      const onPointerMove = (e) => {
+        if (!pointerSwipeRef.current.active) return;
+        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
+
+        pointerSwipeRef.current.lastX = e.clientX;
+        pointerSwipeRef.current.lastY = e.clientY;
+
+        const dx = e.clientX - pointerSwipeRef.current.startX;
+        const dy = e.clientY - pointerSwipeRef.current.startY;
+
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+        if (ady > adx * 1.1) return;
+
+        const now = performance.now();
+        const dt = Math.max(1, now - velocityRef.current.lastT);
+        const instV = (e.clientX - velocityRef.current.lastX) / dt;
+        velocityRef.current.v = velocityRef.current.v * 0.8 + instV * 0.2;
+        velocityRef.current.lastX = e.clientX;
+        velocityRef.current.lastT = now;
+
+        const maxPull = pageWidthPx * 0.55;
+        let finalDx = clamp(dx, -maxPull, maxPull);
+
+        const atStart = currentColumn === 0;
+        const atEnd = currentColumn >= maxColumnIndex;
+        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
+          finalDx *= 0.4;
+        }
+
+        setDragX(finalDx);
+      };
+
+      const onPointerUpOrCancel = () => {
+        if (!pointerSwipeRef.current.active) return;
+        pointerSwipeRef.current.active = false;
+        pointerSwipeRef.current.pointerId = null;
+        setIsDragging(false);
+
+        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
+        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+
+        if (ady > adx * 0.9) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+
+        const v = velocityRef.current.v;
+        const projectionMs = 220;
+        const projectedDx = dx + v * projectionMs;
+
+        const distanceThreshold = Math.min(120, pageWidthPx * 0.18);
+        const velocityThreshold = 0.55;
+
+        const shouldGoNext = projectedDx < -distanceThreshold || v < -velocityThreshold;
+        const shouldGoPrev = projectedDx > distanceThreshold || v > velocityThreshold;
+
+        if (shouldGoNext) return goNextWithAnimation();
+        if (shouldGoPrev) return goPrevWithAnimation();
+
+        animateDragTo(0, () => setDragX(0));
+      };
 
       // ---- quoted posts renderer ----
       const renderQuotedRecord = (embed) => {
@@ -534,7 +577,7 @@
         if (rt === 'app.bsky.embed.record#viewRecord') {
           const author = recordView.author;
           const value = recordView.value || {};
-          const quotedText = value.text || '';
+          const quotedText = safe(value.text);
 
           return (
             <div className={baseCardClass}>
@@ -588,8 +631,68 @@
         return null;
       };
 
-      const PostCard = ({ item, measuring = false, setRef = null, onOpenThread }) => {
-        const post = item.post;
+      // ---- Thread logic ----
+      const flattenThread = (node, out, depth = 0) => {
+        if (!node) return;
+        if (node.parent) flattenThread(node.parent, out, Math.min(depth + 1, 6));
+        if (node.post) out.push({ post: node.post, depth });
+        if (Array.isArray(node.replies)) {
+          for (const r of node.replies) {
+            if (!r?.post) continue;
+            out.push({ post: r.post, depth: Math.min(depth + 1, 6) });
+            // show one more level deep if present
+            if (Array.isArray(r.replies)) {
+              for (const rr of r.replies) {
+                if (!rr?.post) continue;
+                out.push({ post: rr.post, depth: Math.min(depth + 2, 6) });
+              }
+            }
+          }
+        }
+      };
+
+      const openThread = async (uri) => {
+        if (!uri || !session?.accessJwt) return;
+        setThreadOpen(true);
+        setThreadFocusUri(uri);
+        setThreadLoading(true);
+        setThreadError('');
+        setThreadItems([]);
+        try {
+          const data = await xrpcJsonWithAuth(session, `/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=6&parentHeight=10`);
+          const out = [];
+          flattenThread(data?.thread, out, 0);
+
+          // de-dupe by uri
+          const seen = new Set();
+          const unique = [];
+          for (const it of out) {
+            const u = it?.post?.uri;
+            if (!u) continue;
+            if (seen.has(u)) continue;
+            seen.add(u);
+            unique.push(it);
+          }
+          setThreadItems(unique);
+        } catch (e) {
+          setThreadError(e?.message || 'Failed to load thread');
+        } finally {
+          setThreadLoading(false);
+        }
+      };
+
+      const closeThread = () => {
+        setThreadOpen(false);
+        setThreadLoading(false);
+        setThreadError('');
+        setThreadItems([]);
+        setThreadFocusUri(null);
+      };
+
+      // ---- Post card ----
+      const PostCard = ({ item, measuring = false, setRef = null, compact = false }) => {
+        const post = item?.post;
+        if (!post) return null;
 
         const isRepost =
           item.reason?.$type === 'app.bsky.feed.defs#reasonRepost' ||
@@ -598,12 +701,14 @@
         const reposter = isRepost ? item.reason?.by : null;
         const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
 
+        const cardPad = compact ? 'p-3' : 'p-4';
+
         return (
           <div
             ref={setRef}
-            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
+            className={`rounded-xl shadow-lg ${cardPad} ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
           >
-            {isRepost && reposter && (
+            {isRepost && reposter && !compact && (
               <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 <Repeat className="w-4 h-4" />
                 <span>
@@ -614,20 +719,20 @@
             )}
 
             <div className="flex items-start gap-3 mb-3">
-              {post.author.avatar && (
+              {post.author?.avatar && (
                 <img
                   src={post.author.avatar}
                   alt={post.author.displayName || post.author.handle}
-                  className="w-10 h-10 rounded-full"
+                  className={compact ? 'w-9 h-9 rounded-full' : 'w-10 h-10 rounded-full'}
                   onLoad={bumpLayout}
                 />
               )}
               <div className="flex-1 min-w-0">
                 <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {post.author.displayName || post.author.handle}
+                  {post.author?.displayName || post.author?.handle}
                 </div>
                 <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  @{post.author.handle}
+                  @{post.author?.handle}
                 </div>
               </div>
               <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -663,27 +768,30 @@
 
             {renderQuotedRecord(post.embed)}
 
-            <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
-              <button
-                className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (post?.uri) openThread(post.uri);
-                }}
-                title="Open thread"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>{post.replyCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
-                <Repeat className="w-4 h-4" />
-                <span>{post.repostCount || 0}</span>
-              </button>
-              <button className="flex items-center gap-1.5 hover:text-red-500 transition-colors">
-                <Heart className="w-4 h-4" />
-                <span>{post.likeCount || 0}</span>
-              </button>
-            </div>
+            {!compact && (
+              <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                <button
+                  className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (post?.uri) openThread(post.uri);
+                  }}
+                  title="Open thread"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>{post.replyCount || 0}</span>
+                </button>
+                <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors" title="Reposts">
+                  <Repeat className="w-4 h-4" />
+                  <span>{post.repostCount || 0}</span>
+                </button>
+                <button className="flex items-center gap-1.5 hover:text-red-500 transition-colors" title="Likes">
+                  <Heart className="w-4 h-4" />
+                  <span>{post.likeCount || 0}</span>
+                </button>
+              </div>
+            )}
           </div>
         );
       };
@@ -726,153 +834,11 @@
         setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
       }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
 
-      const totalColumns = columns.length;
-      const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
-
-      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
-      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
-
-      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-      const animateDragTo = (targetDragX, onDone) => {
-        setIsAnimating(true);
-        setDragX(targetDragX);
-        window.setTimeout(() => {
-          setIsAnimating(false);
-          onDone?.();
-        }, 260);
-      };
-
-      const goPrevWithAnimation = () => {
-        if (currentColumn === 0) {
-          animateDragTo(0, () => setDragX(0));
-          return;
-        }
-        // animate toward showing the prev page (to the right)
-        animateDragTo(pageWidthPx, () => {
-          setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
-      };
-
-      const goNextWithAnimation = () => {
-        if (currentColumn >= maxColumnIndex) {
-          animateDragTo(0, () => setDragX(0));
-          return;
-        }
-        // animate toward showing the next page (to the left)
-        animateDragTo(-pageWidthPx, () => {
-          setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
-      };
-
-      // ---- momentum + peek POINTER swipe handlers ----
-      const onPointerDown = (e) => {
-        if (e.pointerType === 'mouse') return;
-        if (isAnimating) return;
-
-        pointerSwipeRef.current.active = true;
-        pointerSwipeRef.current.pointerId = e.pointerId;
-        pointerSwipeRef.current.startX = e.clientX;
-        pointerSwipeRef.current.startY = e.clientY;
-        pointerSwipeRef.current.lastX = e.clientX;
-        pointerSwipeRef.current.lastY = e.clientY;
-
-        const now = performance.now();
-        velocityRef.current = { v: 0, lastX: e.clientX, lastT: now };
-
-        setIsDragging(true);
-        setDragX(0);
-
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-      };
-
-      const onPointerMove = (e) => {
-        if (!pointerSwipeRef.current.active) return;
-        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
-
-        pointerSwipeRef.current.lastX = e.clientX;
-        pointerSwipeRef.current.lastY = e.clientY;
-
-        const dx = e.clientX - pointerSwipeRef.current.startX;
-        const dy = e.clientY - pointerSwipeRef.current.startY;
-
-        const adx = Math.abs(dx);
-        const ady = Math.abs(dy);
-
-        // If it's mostly vertical, let the column scroll; don't drag the strip.
-        if (ady > adx * 1.1) return;
-
-        // velocity update
-        const now = performance.now();
-        const dt = Math.max(1, now - velocityRef.current.lastT);
-        const instV = (e.clientX - velocityRef.current.lastX) / dt; // px/ms
-        velocityRef.current.v = velocityRef.current.v * 0.8 + instV * 0.2; // smooth
-        velocityRef.current.lastX = e.clientX;
-        velocityRef.current.lastT = now;
-
-        const maxPull = pageWidthPx * 0.55; // allow a bit more for peeking
-        let finalDx = clamp(dx, -maxPull, maxPull);
-
-        const atStart = currentColumn === 0;
-        const atEnd = currentColumn >= maxColumnIndex;
-        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
-          finalDx *= 0.4; // rubber-band at ends
-        }
-
-        setDragX(finalDx);
-      };
-
-      const onPointerUpOrCancel = (e) => {
-        if (!pointerSwipeRef.current.active) return;
-        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
-
-        pointerSwipeRef.current.active = false;
-        pointerSwipeRef.current.pointerId = null;
-        setIsDragging(false);
-
-        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
-        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
-        const adx = Math.abs(dx);
-        const ady = Math.abs(dy);
-
-        // If it was basically vertical, snap back.
-        if (ady > adx * 0.9) {
-          animateDragTo(0, () => setDragX(0));
-          return;
-        }
-
-        const v = velocityRef.current.v; // px/ms
-
-        // Momentum: project where the finger was "heading"
-        const projectionMs = 220;
-        const projectedDx = dx + v * projectionMs;
-
-        const distanceThreshold = Math.min(120, pageWidthPx * 0.18);
-        const velocityThreshold = 0.55; // px/ms ~ 550px/s
-
-        const shouldGoNext = (projectedDx < -distanceThreshold) || (v < -velocityThreshold);
-        const shouldGoPrev = (projectedDx > distanceThreshold) || (v > velocityThreshold);
-
-        if (shouldGoNext) {
-          goNextWithAnimation();
-          return;
-        }
-        if (shouldGoPrev) {
-          goPrevWithAnimation();
-          return;
-        }
-
-        // otherwise snap back
-        animateDragTo(0, () => setDragX(0));
-      };
-
       // Helper: render a page (3 columns) starting at startIdx
       const renderPage = (startIdx, keyPrefix) => {
         return Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
           const columnIndex = startIdx + idx;
-          const isValid = columnIndex >= 0 && columnIndex < totalColumns;
+          const isValid = columnIndex >= 0 && columnIndex < columns.length;
           const colItems = isValid ? (columns[columnIndex] || []) : [];
 
           return (
@@ -894,7 +860,7 @@
                 )}
 
                 {colItems.map((item) => (
-                  <PostCard onOpenThread={openThread}
+                  <PostCard
                     key={(item.post?.uri || '') + '::' + (item.reason?.by?.did || '') + '::' + (item.reason?.indexedAt || '') + `::${keyPrefix}`}
                     item={item}
                   />
@@ -1120,23 +1086,13 @@
             {columns.length > 0 && (
               <div
                 className="h-screen overflow-hidden p-4 select-none"
-                // swipe surface
-                style={{
-                  touchAction: 'pan-y',
-                  WebkitUserSelect: 'none',
-                  userSelect: 'none',
-                }}
+                style={{ touchAction: 'pan-y', WebkitUserSelect: 'none', userSelect: 'none' }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUpOrCancel}
                 onPointerCancel={onPointerUpOrCancel}
               >
-                {/*
-                  Peek layout:
-                  We render 3 pages (prev/current/next), each page = 3 columns.
-                  The strip is positioned so the CURRENT page is centered (base translate = -pageWidthPx),
-                  and dragX moves it around.
-                */}
+                {/* Peek strip: prev + current + next pages */}
                 <div
                   className="flex gap-4"
                   style={{
@@ -1148,125 +1104,6 @@
                   {renderPage(currentColumn - COLUMNS_TO_SHOW, 'prev')}
                   {renderPage(currentColumn, 'cur')}
                   {renderPage(currentColumn + COLUMNS_TO_SHOW, 'next')}
-                </div>
-              </div>
-            )}
-
-            {threadOpen && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center"
-                role="dialog"
-                aria-modal="true"
-                onClick={closeThread}
-              >
-                <div className={`absolute inset-0 ${darkMode ? 'bg-black/70' : 'bg-black/50'}`} />
-
-                <div
-                  className={`relative w-[min(900px,95vw)] max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className={`flex items-center justify-between px-4 py-3 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                    <div className="font-semibold">Thread</div>
-                    <div className="flex items-center gap-2">
-                      {threadFocusUri && (
-                        <button
-                          className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                          onClick={() => openThread(threadFocusUri)}
-                          disabled={threadLoading}
-                        >
-                          {threadLoading ? 'Loading…' : 'Refresh'}
-                        </button>
-                      )}
-                      <button
-                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                        onClick={closeThread}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-
-                  {threadError && (
-                    <div className="p-4">
-                      <div className={`px-3 py-2 rounded-lg text-sm flex gap-2 ${darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>{threadError}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-4 overflow-y-auto column-scroll" style={{ maxHeight: 'calc(85vh - 56px)' }}>
-                    {threadLoading && threadItems.length === 0 && (
-                      <div className="py-10 text-center">
-                        <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
-                        <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading thread…</div>
-                      </div>
-                    )}
-
-                    {!threadLoading && threadItems.length === 0 && !threadError && (
-                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>No thread data.</div>
-                    )}
-
-                    <div className="space-y-4">
-                      {threadItems.map((it) => (
-                        <div key={it.post.uri} className={it.depth ? `pl-${Math.min(it.depth * 4, 8)}` : ''}>
-                          {/* Compact thread card */}
-                          <div className={`rounded-xl shadow-lg p-4 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                            <div className="flex items-start gap-3 mb-2">
-                              {it.post.author?.avatar && (
-                                <img
-                                  src={it.post.author.avatar}
-                                  alt={it.post.author.displayName || it.post.author.handle}
-                                  className="w-9 h-9 rounded-full"
-                                  onLoad={bumpLayout}
-                                />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  {it.post.author?.displayName || it.post.author?.handle}
-                                </div>
-                                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  @{it.post.author?.handle}
-                                </div>
-                              </div>
-                              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                                {formatTimeAgo(it.post.indexedAt)}
-                              </span>
-                            </div>
-
-                            {it.post.record?.text && (
-                              <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                                {it.post.record.text}
-                              </p>
-                            )}
-
-                            {it.post.embed?.images && it.post.embed.images.length > 0 && (
-                              <div className="mt-3">
-                                <img src={it.post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
-                              </div>
-                            )}
-
-                            {it.post.embed?.external && (
-                              <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                                {it.post.embed.external.thumb && (
-                                  <img src={it.post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
-                                )}
-                                <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  {it.post.embed.external.title}
-                                </div>
-                                <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  {it.post.embed.external.uri}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Show quoted posts inside thread too */}
-                            {renderQuotedRecord(it.post.embed)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
@@ -1293,21 +1130,142 @@
               </>
             )}
 
+            {/* Thread modal */}
+            {threadOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" onClick={closeThread}>
+                <div className={`absolute inset-0 ${darkMode ? 'bg-black/70' : 'bg-black/50'}`} />
+
+                <div
+                  className={`relative w-[min(900px,95vw)] max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className={`flex items-center justify-between px-4 py-3 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">Thread</div>
+                      {threadFocusUri && <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{threadFocusUri}</div>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => threadFocusUri && openThread(threadFocusUri)}
+                        disabled={threadLoading}
+                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} disabled:opacity-50`}
+                      >
+                        {threadLoading ? 'Loading…' : 'Refresh'}
+                      </button>
+                      <button
+                        onClick={closeThread}
+                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 overflow-y-auto column-scroll" style={{ maxHeight: 'calc(85vh - 56px)' }}>
+                    {threadError && (
+                      <div className={`mb-4 px-3 py-2 rounded-lg text-sm flex gap-2 ${darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{threadError}</span>
+                      </div>
+                    )}
+
+                    {threadLoading && threadItems.length === 0 && (
+                      <div className="py-10 text-center">
+                        <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
+                        <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading thread…</div>
+                      </div>
+                    )}
+
+                    {!threadLoading && threadItems.length === 0 && !threadError && (
+                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>No thread data.</div>
+                    )}
+
+                    <div className="space-y-4">
+                      {threadItems.map((it) => {
+                        const isFocus = it.post?.uri === threadFocusUri;
+                        return (
+                          <div key={it.post.uri} style={{ paddingLeft: it.depth ? Math.min(it.depth * 16, 48) : 0 }}>
+                            <div className={isFocus ? `rounded-2xl p-[2px] ${darkMode ? 'bg-indigo-500/30' : 'bg-indigo-200'}` : ''}>
+                              <div className={isFocus ? 'rounded-2xl' : ''}>
+                                <div
+                                  className={`rounded-xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-3`}
+                                  onClick={() => it.post?.uri && openThread(it.post.uri)}
+                                  role="button"
+                                  tabIndex={0}
+                                >
+                                  <div className="flex items-start gap-3 mb-2">
+                                    {it.post.author?.avatar && (
+                                      <img
+                                        src={it.post.author.avatar}
+                                        alt={it.post.author.displayName || it.post.author.handle}
+                                        className="w-9 h-9 rounded-full"
+                                        onLoad={bumpLayout}
+                                      />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                        {it.post.author?.displayName || it.post.author?.handle}
+                                      </div>
+                                      <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        @{it.post.author?.handle}
+                                      </div>
+                                    </div>
+                                    <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                                      {formatTimeAgo(it.post.indexedAt)}
+                                    </span>
+                                  </div>
+
+                                  {it.post.record?.text && (
+                                    <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                                      {it.post.record.text}
+                                    </p>
+                                  )}
+
+                                  {it.post.embed?.images && it.post.embed.images.length > 0 && (
+                                    <div className="mt-3">
+                                      <img src={it.post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
+                                    </div>
+                                  )}
+
+                                  {it.post.embed?.external && (
+                                    <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                                      {it.post.embed.external.thumb && (
+                                        <img src={it.post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
+                                      )}
+                                      <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                        {it.post.embed.external.title}
+                                      </div>
+                                      <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {it.post.embed.external.uri}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {renderQuotedRecord(it.post.embed)}
+
+                                  <div className={`mt-3 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    Tap to drill into this post’s thread
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Hidden measurement column (offscreen) */}
             {posts.length > 0 && (
               <div
-                style={{
-                  position: 'fixed',
-                  left: -10000,
-                  top: 0,
-                  width: columnWidthPx + 'px',
-                  pointerEvents: 'none',
-                  opacity: 0,
-                }}
+                style={{ position: 'fixed', left: -10000, top: 0, width: columnWidthPx + 'px', pointerEvents: 'none', opacity: 0 }}
               >
                 <div className="space-y-4">
                   {posts.map((item, i) => (
-                    <PostCard onOpenThread={openThread}
+                    <PostCard
                       key={(item.post?.uri || '') + '::measure'}
                       item={item}
                       measuring={true}
