@@ -2,10 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Bluesky Column Feed</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -115,7 +112,7 @@
 
     function BlueskyColumnFeed() {
       const [posts, setPosts] = useState([]);
-      const [columns, setColumns] = useState([]); // packed columns
+      const [columns, setColumns] = useState([]);
 
       const [loading, setLoading] = useState(false);
       const [currentColumn, setCurrentColumn] = useState(0);
@@ -134,11 +131,18 @@
       const [sidebarExpanded, setSidebarExpanded] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
 
+      // re-layout trigger
       const [layoutTick, setLayoutTick] = useState(0);
       const measureRefs = useRef([]);
       const rafReflowRef = useRef(null);
 
-      // Pointer swipe tracking (works reliably on iPad Safari)
+      // --- tactile swipe state ---
+      const [dragX, setDragX] = useState(0);
+      const [isDragging, setIsDragging] = useState(false);
+      const [isAnimating, setIsAnimating] = useState(false);
+      const dragMetaRef = useRef({ startColumn: 0, lastDx: 0 });
+
+      // pointer swipe tracking
       const pointerSwipeRef = useRef({
         active: false,
         pointerId: null,
@@ -150,15 +154,13 @@
 
       const bumpLayout = () => {
         if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
-        rafReflowRef.current = requestAnimationFrame(() => setLayoutTick(t => t + 1));
+        rafReflowRef.current = requestAnimationFrame(() => setLayoutTick((t) => t + 1));
       };
 
       // ---- Session helpers ----
       const getPdsBaseUrl = (sess) => {
         try {
-          const svc = sess?.didDoc?.service?.find((s) =>
-            typeof s?.id === 'string' && s.id.includes('#atproto_pds')
-          );
+          const svc = sess?.didDoc?.service?.find((s) => typeof s?.id === 'string' && s.id.includes('#atproto_pds'));
           return svc?.serviceEndpoint || 'https://bsky.social';
         } catch {
           return 'https://bsky.social';
@@ -196,6 +198,7 @@
         setNeedsAuthCode(false);
         setError('');
         setCurrentColumn(0);
+        setDragX(0);
         window.location.reload();
       };
 
@@ -233,7 +236,9 @@
       // proactive refresh
       useEffect(() => {
         if (!session?.refreshJwt) return;
-        const id = setInterval(() => { refreshAccessToken(session).catch(() => {}); }, 2 * 60 * 1000);
+        const id = setInterval(() => {
+          refreshAccessToken(session).catch(() => {});
+        }, 2 * 60 * 1000);
         return () => clearInterval(id);
       }, [session?.refreshJwt]);
 
@@ -302,6 +307,7 @@
         setNeedsAuthCode(false);
         setError('');
         setCurrentColumn(0);
+        setDragX(0);
         localStorage.removeItem('bluesky_session');
       };
 
@@ -311,9 +317,10 @@
         setError('');
         const base = getPdsBaseUrl(sess);
 
-        const doFetch = async (jwt) => fetch(`${base}/xrpc/app.bsky.feed.getTimeline?limit=50`, {
-          headers: { Authorization: `Bearer ${jwt}` },
-        });
+        const doFetch = async (jwt) =>
+          fetch(`${base}/xrpc/app.bsky.feed.getTimeline?limit=50`, {
+            headers: { Authorization: `Bearer ${jwt}` },
+          });
 
         try {
           let resp = await doFetch(sess.accessJwt);
@@ -329,6 +336,7 @@
           const data = await resp.json();
           setPosts(data.feed || []);
           setCurrentColumn(0);
+          setDragX(0);
           bumpLayout();
         } catch (err) {
           setError(`Error loading feed: ${err.message}`);
@@ -337,7 +345,9 @@
         }
       };
 
-      const refresh = () => { if (session) fetchTimeline(session); };
+      const refresh = () => {
+        if (session) fetchTimeline(session);
+      };
 
       // ---- responsive column width ----
       const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64);
@@ -351,16 +361,23 @@
         return Math.max(240, Math.floor(available / COLUMNS_TO_SHOW));
       }, [sidebarExpanded, layoutTick]);
 
-      const columnStyle = useMemo(() => ({
-        flex: `0 0 ${columnWidthPx}px`,
-        maxWidth: `${columnWidthPx}px`,
-        minWidth: 0,
-      }), [columnWidthPx]);
+      const columnStyle = useMemo(
+        () => ({
+          flex: `0 0 ${columnWidthPx}px`,
+          maxWidth: `${columnWidthPx}px`,
+          minWidth: 0,
+        }),
+        [columnWidthPx]
+      );
 
       const columnViewportHeightPx = useMemo(() => {
         const vh = window.innerHeight || 800;
-        return Math.max(200, vh - 32); // calc(100vh - 2rem)
+        return Math.max(200, vh - 32);
       }, [layoutTick]);
+
+      const pageWidthPx = useMemo(() => {
+        return columnWidthPx * COLUMNS_TO_SHOW + GAP_PX * (COLUMNS_TO_SHOW - 1);
+      }, [columnWidthPx]);
 
       // ---- quoted posts renderer ----
       const renderQuotedRecord = (embed) => {
@@ -381,8 +398,7 @@
         if (!recordView || !recordView.$type) return null;
 
         const rt = recordView.$type;
-        const baseCardClass =
-          `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
+        const baseCardClass = `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
 
         if (rt === 'app.bsky.embed.record#viewNotFound') {
           return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div></div>;
@@ -451,7 +467,6 @@
         return null;
       };
 
-      // ---- PostCard ----
       const PostCard = ({ item, measuring = false, setRef = null }) => {
         const post = item.post;
 
@@ -547,7 +562,10 @@
 
       // ---- pack posts into columns (no cut-off posts) ----
       useEffect(() => {
-        if (!posts || posts.length === 0) { setColumns([]); return; }
+        if (!posts || posts.length === 0) {
+          setColumns([]);
+          return;
+        }
 
         measureRefs.current = measureRefs.current.slice(0, posts.length);
 
@@ -563,9 +581,9 @@
 
         for (let i = 0; i < posts.length; i++) {
           const h = heights[i];
-          const addH = (col.length === 0 ? h : h + CARD_GAP_PX);
+          const addH = col.length === 0 ? h : h + CARD_GAP_PX;
 
-          if (col.length === 0 || (colHeight + addH) <= columnViewportHeightPx) {
+          if (col.length === 0 || colHeight + addH <= columnViewportHeightPx) {
             col.push(posts[i]);
             colHeight += addH;
           } else {
@@ -577,19 +595,30 @@
         if (col.length > 0) newCols.push(col);
 
         setColumns(newCols);
-        setCurrentColumn(prev => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
+        setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
       }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
 
       const totalColumns = columns.length;
       const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
 
-      const pagePrev = () => setCurrentColumn(c => Math.max(0, c - COLUMNS_TO_SHOW));
-      const pageNext = () => setCurrentColumn(c => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
+      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
 
-      // ---- POINTER swipe handlers ----
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+      const animateTo = (targetX, onDone) => {
+        setIsAnimating(true);
+        setDragX(targetX);
+        window.setTimeout(() => {
+          setIsAnimating(false);
+          onDone?.();
+        }, 220);
+      };
+
+      // ---- tactile POINTER swipe handlers ----
       const onPointerDown = (e) => {
-        // Only track primary finger-like pointers
         if (e.pointerType === 'mouse') return;
+        if (isAnimating) return;
 
         pointerSwipeRef.current.active = true;
         pointerSwipeRef.current.pointerId = e.pointerId;
@@ -598,7 +627,12 @@
         pointerSwipeRef.current.lastX = e.clientX;
         pointerSwipeRef.current.lastY = e.clientY;
 
-        // Capture so we keep getting events even if finger moves over children
+        dragMetaRef.current.startColumn = currentColumn;
+        dragMetaRef.current.lastDx = 0;
+
+        setIsDragging(true);
+        setDragX(0);
+
         e.currentTarget.setPointerCapture?.(e.pointerId);
       };
 
@@ -608,29 +642,69 @@
 
         pointerSwipeRef.current.lastX = e.clientX;
         pointerSwipeRef.current.lastY = e.clientY;
+
+        const dx = e.clientX - pointerSwipeRef.current.startX;
+        const dy = e.clientY - pointerSwipeRef.current.startY;
+
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+
+        // If it's mostly vertical, let the column scroll; don't drag the strip.
+        if (ady > adx * 1.1) return;
+
+        const maxPull = pageWidthPx * 0.35;
+        let finalDx = clamp(dx, -maxPull, maxPull);
+
+        const atStart = currentColumn === 0;
+        const atEnd = currentColumn >= maxColumnIndex;
+        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
+          finalDx *= 0.35; // rubber-band at ends
+        }
+
+        dragMetaRef.current.lastDx = finalDx;
+        setDragX(finalDx);
       };
 
       const onPointerUpOrCancel = (e) => {
         if (!pointerSwipeRef.current.active) return;
         if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
 
-        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
-        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
-
-        const adx = Math.abs(dx);
-        const ady = Math.abs(dy);
-
-        // Tune for iPad: smaller threshold and require "more horizontal than vertical"
-        const SWIPE_MIN_PX = 55;
-        const HORIZONTAL_RATIO = 1.25; // adx must be >= ady * ratio
-
-        if (adx >= SWIPE_MIN_PX && adx >= ady * HORIZONTAL_RATIO) {
-          if (dx > 0) pagePrev();
-          else pageNext();
-        }
-
         pointerSwipeRef.current.active = false;
         pointerSwipeRef.current.pointerId = null;
+
+        setIsDragging(false);
+
+        const dx = dragMetaRef.current.lastDx;
+        const adx = Math.abs(dx);
+
+        const threshold = Math.min(120, pageWidthPx * 0.18);
+
+        if (adx < threshold) {
+          animateTo(0, () => setDragX(0));
+          return;
+        }
+
+        if (dx < 0) {
+          // swipe left -> next
+          if (currentColumn >= maxColumnIndex) {
+            animateTo(0, () => setDragX(0));
+            return;
+          }
+          animateTo(-pageWidthPx, () => {
+            setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+            setDragX(0);
+          });
+        } else {
+          // swipe right -> prev
+          if (currentColumn === 0) {
+            animateTo(0, () => setDragX(0));
+            return;
+          }
+          animateTo(pageWidthPx, () => {
+            setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
+            setDragX(0);
+          });
+        }
       };
 
       // ---------- Login screen ----------
@@ -701,7 +775,11 @@
 
                 {needsAuthCode && (
                   <button
-                    onClick={() => { setNeedsAuthCode(false); setAuthCode(''); setError(''); }}
+                    onClick={() => {
+                      setNeedsAuthCode(false);
+                      setAuthCode('');
+                      setError('');
+                    }}
                     className="w-full text-indigo-600 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition-colors"
                   >
                     Back
@@ -734,7 +812,10 @@
           <div className={`shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="h-full flex flex-col">
               <button
-                onClick={() => { setSidebarExpanded(!sidebarExpanded); bumpLayout(); }}
+                onClick={() => {
+                  setSidebarExpanded(!sidebarExpanded);
+                  bumpLayout();
+                }}
                 className={`p-4 transition-colors border-b ${darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'}`}
               >
                 <Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
@@ -783,7 +864,11 @@
                     title="Toggle Theme"
                   >
                     {darkMode ? <Sun className="w-5 h-5 flex-shrink-0 text-yellow-400" /> : <Moon className="w-5 h-5 flex-shrink-0 text-indigo-600" />}
-                    {sidebarExpanded && <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+                    {sidebarExpanded && (
+                      <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>
+                        {darkMode ? 'Light Mode' : 'Dark Mode'}
+                      </span>
+                    )}
                   </button>
                 </nav>
               </div>
@@ -834,21 +919,27 @@
               </div>
             )}
 
-            {/* Swipe surface wraps the columns area */}
             {columns.length > 0 && (
               <div
                 className="h-screen overflow-hidden p-4 select-none"
                 style={{
-                  touchAction: 'pan-y',  // allow vertical scrolling; we detect horizontal swipes
+                  touchAction: 'pan-y',
                   WebkitUserSelect: 'none',
-                  userSelect: 'none'
+                  userSelect: 'none',
                 }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUpOrCancel}
                 onPointerCancel={onPointerUpOrCancel}
               >
-                <div className="flex gap-4">
+                <div
+                  className="flex gap-4"
+                  style={{
+                    transform: `translate3d(${dragX}px, 0, 0)`,
+                    transition: isDragging ? 'none' : 'transform 220ms ease-out',
+                    willChange: 'transform',
+                  }}
+                >
                   {Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
                     const columnIndex = currentColumn + idx;
                     if (columnIndex >= columns.length) return null;
@@ -881,7 +972,6 @@
               </div>
             )}
 
-            {/* Navigation arrows (move 3 columns at a time) */}
             {columns.length > 0 && (
               <>
                 <button
@@ -922,7 +1012,9 @@
                       key={(item.post?.uri || '') + '::measure'}
                       item={item}
                       measuring={true}
-                      setRef={(el) => { measureRefs.current[i] = el; }}
+                      setRef={(el) => {
+                        measureRefs.current[i] = el;
+                      }}
                     />
                   ))}
                 </div>
