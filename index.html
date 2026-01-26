@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
   <title>Bluesky Column Feed</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -20,20 +23,19 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useEffect, useMemo, useRef, useState } = React;
 
+    // --- Icons ---
     const ChevronLeft = () => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polyline points="15 18 9 12 15 6"></polyline>
       </svg>
     );
-
     const ChevronRight = () => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polyline points="9 18 15 12 9 6"></polyline>
       </svg>
     );
-
     const RefreshCw = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polyline points="23 4 23 10 17 10"></polyline>
@@ -41,7 +43,6 @@
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
       </svg>
     );
-
     const AlertCircle = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10"></circle>
@@ -49,7 +50,6 @@
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
     );
-
     const LogOut = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -57,7 +57,6 @@
         <line x1="21" y1="12" x2="9" y2="12"></line>
       </svg>
     );
-
     const Menu = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -65,27 +64,23 @@
         <line x1="3" y1="18" x2="21" y2="18"></line>
       </svg>
     );
-
     const Search = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="11" cy="11" r="8"></circle>
         <path d="m21 21-4.35-4.35"></path>
       </svg>
     );
-
     const TrendingUp = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
         <polyline points="17 6 23 6 23 12"></polyline>
       </svg>
     );
-
     const Moon = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
     );
-
     const Sun = ({ className }) => (
       <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="5"></circle>
@@ -99,13 +94,11 @@
         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
       </svg>
     );
-
     const MessageCircle = ({ className }) => (
       <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
       </svg>
     );
-
     const Repeat = ({ className }) => (
       <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <polyline points="17 1 21 5 17 9"></polyline>
@@ -114,15 +107,17 @@
         <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
       </svg>
     );
-
     const Heart = ({ className }) => (
       <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
       </svg>
     );
 
-    const BlueskyColumnFeed = () => {
+    function BlueskyColumnFeed() {
+      // ---------- Data/UI state ----------
       const [posts, setPosts] = useState([]);
+      const [columns, setColumns] = useState([]); // packed columns (variable posts per column)
+
       const [loading, setLoading] = useState(false);
       const [currentColumn, setCurrentColumn] = useState(0);
 
@@ -135,11 +130,36 @@
       const [session, setSession] = useState(null);
       const [error, setError] = useState('');
 
-      const POSTS_PER_COLUMN = 3;   // (still fixed-count columns in this version)
       const COLUMNS_TO_SHOW = 3;
 
       const [sidebarExpanded, setSidebarExpanded] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
+
+      // layout tick whenever we need to recompute packing
+      const [layoutTick, setLayoutTick] = useState(0);
+
+      // refs for measurement
+      const measureRefs = useRef([]);
+      const rafReflowRef = useRef(null);
+
+      // swipe tracking
+      const touchRef = useRef({
+        active: false,
+        startX: 0,
+        startY: 0,
+        lastX: 0,
+        lastY: 0,
+        decided: false,
+        isHorizontal: false
+      });
+
+      // ---------- Helpers ----------
+      const bumpLayout = () => {
+        if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
+        rafReflowRef.current = requestAnimationFrame(() => {
+          setLayoutTick(t => t + 1);
+        });
+      };
 
       // -------- Session helpers (PDS + refresh) --------
       const getPdsBaseUrl = (sess) => {
@@ -182,13 +202,14 @@
       const hardReset = () => {
         try {
           localStorage.removeItem('bluesky_session');
-          // Keep darkMode preference; comment next line if you want to reset it too
+          // keep darkMode; uncomment next line if you want to reset theme too:
           // localStorage.removeItem('darkMode');
         } catch (e) {}
 
         setIsLoggedIn(false);
         setSession(null);
         setPosts([]);
+        setColumns([]);
         setHandle('');
         setPassword('');
         setAuthCode('');
@@ -199,7 +220,21 @@
         window.location.reload();
       };
 
-      // Load saved session + theme on startup
+      const formatTimeAgo = (timestamp) => {
+        const now = new Date();
+        const posted = new Date(timestamp);
+        const diffMs = now - posted;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) return 'now';
+        if (diffMins < 60) return `${diffMins}m`;
+        if (diffHours < 24) return `${diffHours}h`;
+        return `${diffDays}d`;
+      };
+
+      // ---------- Startup: load session + theme ----------
       useEffect(() => {
         const savedSession = localStorage.getItem('bluesky_session');
         const savedDarkMode = localStorage.getItem('darkMode');
@@ -211,7 +246,7 @@
             const sessionData = JSON.parse(savedSession);
             setSession(sessionData);
             setIsLoggedIn(true);
-            fetchTimeline(sessionData); // use the session object
+            fetchTimeline(sessionData);
           } catch (e) {
             localStorage.removeItem('bluesky_session');
           }
@@ -229,10 +264,23 @@
         return () => clearInterval(id);
       }, [session?.refreshJwt]);
 
+      // Resize/orientation -> re-layout
+      useEffect(() => {
+        const onResize = () => bumpLayout();
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', onResize);
+        return () => {
+          window.removeEventListener('resize', onResize);
+          window.removeEventListener('orientationchange', onResize);
+        };
+      }, []);
+
+      // ---------- Actions ----------
       const toggleDarkMode = () => {
         const newMode = !darkMode;
         setDarkMode(newMode);
         localStorage.setItem('darkMode', newMode);
+        bumpLayout();
       };
 
       const login = async () => {
@@ -242,7 +290,6 @@
           const body = { identifier: handle, password };
           if (authCode) body.authFactorToken = authCode;
 
-          // createSession should be called on the user's PDS, but bsky.social generally works.
           const response = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -276,11 +323,13 @@
         setIsLoggedIn(false);
         setSession(null);
         setPosts([]);
+        setColumns([]);
         setHandle('');
         setPassword('');
         setAuthCode('');
         setNeedsAuthCode(false);
         setError('');
+        setCurrentColumn(0);
         localStorage.removeItem('bluesky_session');
       };
 
@@ -316,6 +365,7 @@
           const data = await resp.json();
           setPosts(data.feed || []);
           setCurrentColumn(0);
+          bumpLayout();
         } catch (err) {
           setError(`Error loading feed: ${err.message}`);
         } finally {
@@ -323,45 +373,33 @@
         }
       };
 
-      const refresh = () => {
-        if (session) fetchTimeline(session);
-      };
+      const refresh = () => { if (session) fetchTimeline(session); };
 
-      const totalColumns = Math.ceil(posts.length / POSTS_PER_COLUMN);
-      const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
-
-      const getColumnPosts = (columnIndex) => {
-        const start = columnIndex * POSTS_PER_COLUMN;
-        const end = start + POSTS_PER_COLUMN;
-        return posts.slice(start, end);
-      };
-
-      const formatTimeAgo = (timestamp) => {
-        const now = new Date();
-        const posted = new Date(timestamp);
-        const diffMs = now - posted;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffMins < 1) return 'now';
-        if (diffMins < 60) return `${diffMins}m`;
-        if (diffHours < 24) return `${diffHours}h`;
-        return `${diffDays}d`;
-      };
-
-      // ----- Responsive column width so 3 columns always fit viewport -----
+      // ---------- Responsive column width so 3 columns fit ----------
       const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64); // w-64 / w-16
       const GAP_PX = 16; // gap-4
       const PAD_PX = 16; // p-4 each side
+      const CARD_GAP_PX = 16; // space-y-4 between cards in a column
 
-      const columnStyle = {
-        flex: `0 0 calc((100vw - ${getSidebarWidthPx()}px - ${PAD_PX * 2}px - ${(COLUMNS_TO_SHOW - 1) * GAP_PX}px) / ${COLUMNS_TO_SHOW})`,
-        maxWidth: `calc((100vw - ${getSidebarWidthPx()}px - ${PAD_PX * 2}px - ${(COLUMNS_TO_SHOW - 1) * GAP_PX}px) / ${COLUMNS_TO_SHOW})`,
+      const columnWidthPx = useMemo(() => {
+        const vw = window.innerWidth || 1024;
+        const available = vw - getSidebarWidthPx() - (PAD_PX * 2) - ((COLUMNS_TO_SHOW - 1) * GAP_PX);
+        return Math.max(240, Math.floor(available / COLUMNS_TO_SHOW));
+      }, [sidebarExpanded, COLUMNS_TO_SHOW, layoutTick]);
+
+      const columnStyle = useMemo(() => ({
+        flex: `0 0 ${columnWidthPx}px`,
+        maxWidth: `${columnWidthPx}px`,
         minWidth: 0,
-      };
+      }), [columnWidthPx]);
 
-      // ----- Quoted posts renderer -----
+      // Matches maxHeight: calc(100vh - 2rem) = 32px
+      const columnViewportHeightPx = useMemo(() => {
+        const vh = window.innerHeight || 800;
+        return Math.max(200, vh - 32);
+      }, [layoutTick]);
+
+      // ---------- Quoted posts renderer ----------
       const renderQuotedRecord = (embed) => {
         if (!embed || !embed.$type) return null;
 
@@ -380,8 +418,7 @@
         if (!recordView || !recordView.$type) return null;
 
         const rt = recordView.$type;
-        const baseCardClass =
-          `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
+        const baseCardClass = `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
 
         if (rt === 'app.bsky.embed.record#viewNotFound') {
           return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div></div>;
@@ -402,7 +439,7 @@
             <div className={baseCardClass}>
               <div className="flex items-start gap-2 mb-2">
                 {author?.avatar && (
-                  <img src={author.avatar} alt={author.displayName || author.handle} className="w-7 h-7 rounded-full" />
+                  <img src={author.avatar} alt={author.displayName || author.handle} className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -426,14 +463,14 @@
 
               {mediaView?.$type === 'app.bsky.embed.images#view' && mediaView.images?.length > 0 && (
                 <div className="mt-3">
-                  <img src={mediaView.images[0].thumb} alt="" className="rounded-lg w-full" />
+                  <img src={mediaView.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
                 </div>
               )}
 
               {mediaView?.$type === 'app.bsky.embed.external#view' && mediaView.external && (
                 <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                   {mediaView.external.thumb && (
-                    <img src={mediaView.external.thumb} alt="" className="rounded w-full mb-2" />
+                    <img src={mediaView.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
                   )}
                   <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     {mediaView.external.title}
@@ -450,7 +487,246 @@
         return null;
       };
 
-      // -------- Login screen --------
+      // ---------- Post Card (used for visible + measuring) ----------
+      const PostCard = ({ item, measuring = false, setRef = null }) => {
+        const post = item.post;
+
+        const isRepost =
+          item.reason?.$type === 'app.bsky.feed.defs#reasonRepost' ||
+          item.reason?.$type === 'app.bsky.feed.defs#skeletonReasonRepost';
+
+        const reposter = isRepost ? item.reason?.by : null;
+        const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
+
+        return (
+          <div
+            ref={setRef}
+            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
+          >
+            {isRepost && reposter && (
+              <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <Repeat className="w-4 h-4" />
+                <span>
+                  Reposted by <span className="font-semibold">@{reposter.handle}</span>
+                  {repostedAt ? ` · ${formatTimeAgo(repostedAt)}` : ''}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-start gap-3 mb-3">
+              {post.author.avatar && (
+                <img
+                  src={post.author.avatar}
+                  alt={post.author.displayName || post.author.handle}
+                  className="w-10 h-10 rounded-full"
+                  onLoad={bumpLayout}
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {post.author.displayName || post.author.handle}
+                </div>
+                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  @{post.author.handle}
+                </div>
+              </div>
+              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {formatTimeAgo(post.indexedAt)}
+              </span>
+            </div>
+
+            {post.record?.text && (
+              <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                {post.record.text}
+              </p>
+            )}
+
+            {post.embed?.images && post.embed.images.length > 0 && (
+              <div className="mt-3">
+                <img
+                  src={post.embed.images[0].thumb}
+                  alt=""
+                  className="rounded-lg w-full"
+                  onLoad={bumpLayout}
+                />
+              </div>
+            )}
+
+            {post.embed?.external && (
+              <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                {post.embed.external.thumb && (
+                  <img
+                    src={post.embed.external.thumb}
+                    alt=""
+                    className="rounded w-full mb-2"
+                    onLoad={bumpLayout}
+                  />
+                )}
+                <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {post.embed.external.title}
+                </div>
+                <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {post.embed.external.uri}
+                </div>
+              </div>
+            )}
+
+            {renderQuotedRecord(post.embed)}
+
+            <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+              <button className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors">
+                <MessageCircle className="w-4 h-4" />
+                <span>{post.replyCount || 0}</span>
+              </button>
+              <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
+                <Repeat className="w-4 h-4" />
+                <span>{post.repostCount || 0}</span>
+              </button>
+              <button className="flex items-center gap-1.5 hover:text-red-500 transition-colors">
+                <Heart className="w-4 h-4" />
+                <span>{post.likeCount || 0}</span>
+              </button>
+            </div>
+          </div>
+        );
+      };
+
+      // ---------- Measure + pack posts into columns (no cut-off posts) ----------
+      useEffect(() => {
+        if (!posts || posts.length === 0) {
+          setColumns([]);
+          return;
+        }
+
+        measureRefs.current = measureRefs.current.slice(0, posts.length);
+
+        const heights = posts.map((_, i) => {
+          const el = measureRefs.current[i];
+          if (!el) return 320; // fallback until measured
+          const r = el.getBoundingClientRect();
+          return Math.ceil(r.height);
+        });
+
+        const newCols = [];
+        let col = [];
+        let colHeight = 0;
+
+        for (let i = 0; i < posts.length; i++) {
+          const h = heights[i];
+          const addH = (col.length === 0 ? h : h + CARD_GAP_PX);
+
+          if (col.length === 0 || (colHeight + addH) <= columnViewportHeightPx) {
+            col.push(posts[i]);
+            colHeight += addH;
+          } else {
+            newCols.push(col);
+            col = [posts[i]];
+            colHeight = h;
+          }
+        }
+        if (col.length > 0) newCols.push(col);
+
+        setColumns(newCols);
+
+        setCurrentColumn(prev => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
+      }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
+
+      const totalColumns = columns.length;
+      const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
+
+      // ---------- Swipe navigation ----------
+      const pagePrev = () => setCurrentColumn(c => Math.max(0, c - COLUMNS_TO_SHOW));
+      const pageNext = () => setCurrentColumn(c => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+
+      const onTouchStart = (e) => {
+        // If the touch starts inside a scrollable column, we still allow swipe,
+        // but we’ll only act if it’s clearly a horizontal gesture.
+        const t = e.touches[0];
+        touchRef.current = {
+          active: true,
+          startX: t.clientX,
+          startY: t.clientY,
+          lastX: t.clientX,
+          lastY: t.clientY,
+          decided: false,
+          isHorizontal: false
+        };
+      };
+
+      const onTouchMove = (e) => {
+        if (!touchRef.current.active) return;
+        const t = e.touches[0];
+        const dx = t.clientX - touchRef.current.startX;
+        const dy = t.clientY - touchRef.current.startY;
+
+        touchRef.current.lastX = t.clientX;
+        touchRef.current.lastY = t.clientY;
+
+        // Decide gesture direction once it’s moved a bit
+        if (!touchRef.current.decided) {
+          const adx = Math.abs(dx);
+          const ady = Math.abs(dy);
+          if (adx < 10 && ady < 10) return;
+
+          touchRef.current.decided = true;
+          touchRef.current.isHorizontal = adx > ady * 1.2; // clearly horizontal
+        }
+
+        // If it’s a horizontal swipe, prevent the browser from treating it as scroll
+        if (touchRef.current.isHorizontal) {
+          e.preventDefault();
+        }
+      };
+
+      const onTouchEnd = () => {
+        if (!touchRef.current.active) return;
+
+        const dx = touchRef.current.lastX - touchRef.current.startX;
+        const dy = touchRef.current.lastY - touchRef.current.startY;
+
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+
+        // Require a fairly confident horizontal swipe
+        const SWIPE_MIN_PX = 60;
+        const SWIPE_MAX_VERTICAL = 80;
+
+        if (adx >= SWIPE_MIN_PX && ady <= SWIPE_MAX_VERTICAL) {
+          if (dx > 0) {
+            // swipe right => previous columns
+            pagePrev();
+          } else {
+            // swipe left => next columns
+            pageNext();
+          }
+        }
+
+        touchRef.current.active = false;
+      };
+
+      // IMPORTANT: iOS Safari needs passive:false if we call preventDefault in touchmove
+      useEffect(() => {
+        const el = document.getElementById('swipe-surface');
+        if (!el) return;
+
+        const ts = (e) => onTouchStart(e);
+        const tm = (e) => onTouchMove(e);
+        const te = () => onTouchEnd();
+
+        el.addEventListener('touchstart', ts, { passive: true });
+        el.addEventListener('touchmove', tm, { passive: false });
+        el.addEventListener('touchend', te, { passive: true });
+        el.addEventListener('touchcancel', te, { passive: true });
+
+        return () => {
+          el.removeEventListener('touchstart', ts);
+          el.removeEventListener('touchmove', tm);
+          el.removeEventListener('touchend', te);
+          el.removeEventListener('touchcancel', te);
+        };
+      }, [maxColumnIndex, COLUMNS_TO_SHOW]);
+
+      // ---------- Login screen ----------
       if (!isLoggedIn) {
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
@@ -548,14 +824,14 @@
         );
       }
 
-      // -------- Main app --------
+      // ---------- Main app ----------
       return (
         <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 to-indigo-100'}`}>
           {/* Sidebar */}
           <div className={`shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="h-full flex flex-col">
               <button
-                onClick={() => setSidebarExpanded(!sidebarExpanded)}
+                onClick={() => { setSidebarExpanded(!sidebarExpanded); bumpLayout(); }}
                 className={`p-4 transition-colors border-b ${darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'}`}
               >
                 <Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
@@ -655,15 +931,15 @@
               </div>
             )}
 
-            {/* Columns */}
-            {posts.length > 0 && (
-              <div className="h-screen overflow-hidden p-4">
+            {/* Swipe surface wraps the columns area */}
+            {columns.length > 0 && (
+              <div id="swipe-surface" className="h-screen overflow-hidden p-4 select-none">
                 <div className="flex gap-4">
                   {Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
                     const columnIndex = currentColumn + idx;
                     if (columnIndex >= totalColumns) return null;
 
-                    const columnPosts = getColumnPosts(columnIndex);
+                    const colItems = columns[columnIndex] || [];
 
                     return (
                       <div key={columnIndex} className="flex-shrink-0" style={columnStyle}>
@@ -671,105 +947,19 @@
                           className="column-scroll space-y-4 pb-10 overflow-y-auto"
                           style={{ maxHeight: 'calc(100vh - 2rem)' }}
                           onScroll={(e) => {
+                            // scroll-sync across the visible columns
                             const top = e.currentTarget.scrollTop;
                             document.querySelectorAll('.column-scroll').forEach((el) => {
                               if (el !== e.currentTarget) el.scrollTop = top;
                             });
                           }}
                         >
-                          {columnPosts.map((item) => {
-                            const post = item.post;
-
-                            const isRepost =
-                              item.reason?.$type === 'app.bsky.feed.defs#reasonRepost' ||
-                              item.reason?.$type === 'app.bsky.feed.defs#skeletonReasonRepost';
-                            const reposter = isRepost ? item.reason?.by : null;
-                            const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
-
-                            return (
-                              <div
-                                key={(post?.uri || '') + '::' + (reposter?.did || '') + '::' + (repostedAt || '')}
-                                className={`rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
-                              >
-                                {isRepost && reposter && (
-                                  <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    <Repeat className="w-4 h-4" />
-                                    <span>
-                                      Reposted by <span className="font-semibold">@{reposter.handle}</span>
-                                      {repostedAt ? ` · ${formatTimeAgo(repostedAt)}` : ''}
-                                    </span>
-                                  </div>
-                                )}
-
-                                <div className="flex items-start gap-3 mb-3">
-                                  {post.author.avatar && (
-                                    <img
-                                      src={post.author.avatar}
-                                      alt={post.author.displayName || post.author.handle}
-                                      className="w-10 h-10 rounded-full"
-                                    />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      {post.author.displayName || post.author.handle}
-                                    </div>
-                                    <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                      @{post.author.handle}
-                                    </div>
-                                  </div>
-                                  <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                                    {formatTimeAgo(post.indexedAt)}
-                                  </span>
-                                </div>
-
-                                {post.record?.text && (
-                                  <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                                    {post.record.text}
-                                  </p>
-                                )}
-
-                                {/* Images */}
-                                {post.embed?.images && post.embed.images.length > 0 && (
-                                  <div className="mt-3">
-                                    <img src={post.embed.images[0].thumb} alt="" className="rounded-lg w-full" />
-                                  </div>
-                                )}
-
-                                {/* External card */}
-                                {post.embed?.external && (
-                                  <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                                    {post.embed.external.thumb && (
-                                      <img src={post.embed.external.thumb} alt="" className="rounded w-full mb-2" />
-                                    )}
-                                    <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      {post.embed.external.title}
-                                    </div>
-                                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                      {post.embed.external.uri}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Quoted posts */}
-                                {renderQuotedRecord(post.embed)}
-
-                                <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
-                                  <button className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors">
-                                    <MessageCircle className="w-4 h-4" />
-                                    <span>{post.replyCount || 0}</span>
-                                  </button>
-                                  <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
-                                    <Repeat className="w-4 h-4" />
-                                    <span>{post.repostCount || 0}</span>
-                                  </button>
-                                  <button className="flex items-center gap-1.5 hover:text-red-500 transition-colors">
-                                    <Heart className="w-4 h-4" />
-                                    <span>{post.likeCount || 0}</span>
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          {colItems.map((item) => (
+                            <PostCard
+                              key={(item.post?.uri || '') + '::' + (item.reason?.by?.did || '') + '::' + (item.reason?.indexedAt || '')}
+                              item={item}
+                            />
+                          ))}
                         </div>
                       </div>
                     );
@@ -779,10 +969,10 @@
             )}
 
             {/* Navigation arrows (move 3 columns at a time) */}
-            {posts.length > 0 && (
+            {columns.length > 0 && (
               <>
                 <button
-                  onClick={() => setCurrentColumn(Math.max(0, currentColumn - COLUMNS_TO_SHOW))}
+                  onClick={pagePrev}
                   disabled={currentColumn === 0}
                   className={`fixed left-20 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
                   title="Previous columns"
@@ -791,7 +981,7 @@
                 </button>
 
                 <button
-                  onClick={() => setCurrentColumn(Math.min(maxColumnIndex, currentColumn + COLUMNS_TO_SHOW))}
+                  onClick={pageNext}
                   disabled={currentColumn >= maxColumnIndex}
                   className={`fixed right-4 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
                   title="Next columns"
@@ -800,10 +990,35 @@
                 </button>
               </>
             )}
+
+            {/* Hidden measurement column (offscreen) */}
+            {posts.length > 0 && (
+              <div
+                style={{
+                  position: 'fixed',
+                  left: -10000,
+                  top: 0,
+                  width: columnWidthPx + 'px',
+                  pointerEvents: 'none',
+                  opacity: 0,
+                }}
+              >
+                <div className="space-y-4">
+                  {posts.map((item, i) => (
+                    <PostCard
+                      key={(item.post?.uri || '') + '::measure'}
+                      item={item}
+                      measuring={true}
+                      setRef={(el) => { measureRefs.current[i] = el; }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
-    };
+    }
 
     ReactDOM.render(<BlueskyColumnFeed />, document.getElementById('root'));
   </script>
