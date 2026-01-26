@@ -143,29 +143,29 @@
       const rafReflowRef = useRef(null);
 
       // swipe tracking
-      const touchRef = useRef({
+      const swipeRef = useRef({
         active: false,
         startX: 0,
         startY: 0,
         lastX: 0,
         lastY: 0,
         decided: false,
-        isHorizontal: false
+        isHorizontal: false,
       });
 
       // ---------- Helpers ----------
       const bumpLayout = () => {
         if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
         rafReflowRef.current = requestAnimationFrame(() => {
-          setLayoutTick(t => t + 1);
+          setLayoutTick((t) => t + 1);
         });
       };
 
       // -------- Session helpers (PDS + refresh) --------
       const getPdsBaseUrl = (sess) => {
         try {
-          const svc = sess?.didDoc?.service?.find((s) =>
-            typeof s?.id === 'string' && s.id.includes('#atproto_pds')
+          const svc = sess?.didDoc?.service?.find(
+            (s) => typeof s?.id === 'string' && s.id.includes('#atproto_pds')
           );
           return svc?.serviceEndpoint || 'https://bsky.social';
         } catch {
@@ -202,7 +202,7 @@
       const hardReset = () => {
         try {
           localStorage.removeItem('bluesky_session');
-          // keep darkMode; uncomment next line if you want to reset theme too:
+          // keep darkMode; uncomment next line to reset theme too
           // localStorage.removeItem('darkMode');
         } catch (e) {}
 
@@ -256,11 +256,9 @@
       // Proactive refresh: keep access token fresh in the background
       useEffect(() => {
         if (!session?.refreshJwt) return;
-
         const id = setInterval(() => {
           refreshAccessToken(session).catch(() => {});
         }, 2 * 60 * 1000); // every 2 minutes
-
         return () => clearInterval(id);
       }, [session?.refreshJwt]);
 
@@ -359,7 +357,9 @@
 
           if (!resp.ok) {
             const err = await resp.json().catch(() => null);
-            throw new Error(err?.message ? `${resp.status}: ${err.message}` : `Failed to fetch timeline: ${resp.status}`);
+            throw new Error(
+              err?.message ? `${resp.status}: ${err.message}` : `Failed to fetch timeline: ${resp.status}`
+            );
           }
 
           const data = await resp.json();
@@ -373,7 +373,9 @@
         }
       };
 
-      const refresh = () => { if (session) fetchTimeline(session); };
+      const refresh = () => {
+        if (session) fetchTimeline(session);
+      };
 
       // ---------- Responsive column width so 3 columns fit ----------
       const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64); // w-64 / w-16
@@ -383,15 +385,18 @@
 
       const columnWidthPx = useMemo(() => {
         const vw = window.innerWidth || 1024;
-        const available = vw - getSidebarWidthPx() - (PAD_PX * 2) - ((COLUMNS_TO_SHOW - 1) * GAP_PX);
+        const available = vw - getSidebarWidthPx() - PAD_PX * 2 - (COLUMNS_TO_SHOW - 1) * GAP_PX;
         return Math.max(240, Math.floor(available / COLUMNS_TO_SHOW));
-      }, [sidebarExpanded, COLUMNS_TO_SHOW, layoutTick]);
+      }, [sidebarExpanded, layoutTick]);
 
-      const columnStyle = useMemo(() => ({
-        flex: `0 0 ${columnWidthPx}px`,
-        maxWidth: `${columnWidthPx}px`,
-        minWidth: 0,
-      }), [columnWidthPx]);
+      const columnStyle = useMemo(
+        () => ({
+          flex: `0 0 ${columnWidthPx}px`,
+          maxWidth: `${columnWidthPx}px`,
+          minWidth: 0,
+        }),
+        [columnWidthPx]
+      );
 
       // Matches maxHeight: calc(100vh - 2rem) = 32px
       const columnViewportHeightPx = useMemo(() => {
@@ -418,16 +423,30 @@
         if (!recordView || !recordView.$type) return null;
 
         const rt = recordView.$type;
-        const baseCardClass = `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
+        const baseCardClass = `mt-3 rounded-lg border p-3 ${
+          darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
+        }`;
 
         if (rt === 'app.bsky.embed.record#viewNotFound') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div></div>;
+          return (
+            <div className={baseCardClass}>
+              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div>
+            </div>
+          );
         }
         if (rt === 'app.bsky.embed.record#viewBlocked') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is blocked.</div></div>;
+          return (
+            <div className={baseCardClass}>
+              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is blocked.</div>
+            </div>
+          );
         }
         if (rt === 'app.bsky.embed.record#viewDetached') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is unavailable.</div></div>;
+          return (
+            <div className={baseCardClass}>
+              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is unavailable.</div>
+            </div>
+          );
         }
 
         if (rt === 'app.bsky.embed.record#viewRecord') {
@@ -439,16 +458,19 @@
             <div className={baseCardClass}>
               <div className="flex items-start gap-2 mb-2">
                 {author?.avatar && (
-                  <img src={author.avatar} alt={author.displayName || author.handle} className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
+                  <img
+                    src={author.avatar}
+                    alt={author.displayName || author.handle}
+                    className="w-7 h-7 rounded-full"
+                    onLoad={bumpLayout}
+                  />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                     {author?.displayName || author?.handle || 'Unknown'}
                   </div>
                   {author?.handle && (
-                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      @{author.handle}
-                    </div>
+                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{author.handle}</div>
                   )}
                 </div>
               </div>
@@ -496,12 +518,14 @@
           item.reason?.$type === 'app.bsky.feed.defs#skeletonReasonRepost';
 
         const reposter = isRepost ? item.reason?.by : null;
-        const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
+        const repostedAt = isRepost ? item.reason?.indexedAt || item.reason?.indexed_at : null;
 
         return (
           <div
             ref={setRef}
-            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
+            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${
+              darkMode ? 'bg-gray-800' : 'bg-white'
+            }`}
           >
             {isRepost && reposter && (
               <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -526,13 +550,9 @@
                 <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {post.author.displayName || post.author.handle}
                 </div>
-                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  @{post.author.handle}
-                </div>
+                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{post.author.handle}</div>
               </div>
-              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                {formatTimeAgo(post.indexedAt)}
-              </span>
+              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>{formatTimeAgo(post.indexedAt)}</span>
             </div>
 
             {post.record?.text && (
@@ -543,24 +563,14 @@
 
             {post.embed?.images && post.embed.images.length > 0 && (
               <div className="mt-3">
-                <img
-                  src={post.embed.images[0].thumb}
-                  alt=""
-                  className="rounded-lg w-full"
-                  onLoad={bumpLayout}
-                />
+                <img src={post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
               </div>
             )}
 
             {post.embed?.external && (
               <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 {post.embed.external.thumb && (
-                  <img
-                    src={post.embed.external.thumb}
-                    alt=""
-                    className="rounded w-full mb-2"
-                    onLoad={bumpLayout}
-                  />
+                  <img src={post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
                 )}
                 <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {post.embed.external.title}
@@ -613,9 +623,9 @@
 
         for (let i = 0; i < posts.length; i++) {
           const h = heights[i];
-          const addH = (col.length === 0 ? h : h + CARD_GAP_PX);
+          const addH = col.length === 0 ? h : h + CARD_GAP_PX;
 
-          if (col.length === 0 || (colHeight + addH) <= columnViewportHeightPx) {
+          if (col.length === 0 || colHeight + addH <= columnViewportHeightPx) {
             col.push(posts[i]);
             colHeight += addH;
           } else {
@@ -627,104 +637,75 @@
         if (col.length > 0) newCols.push(col);
 
         setColumns(newCols);
-
-        setCurrentColumn(prev => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
+        setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
       }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
 
       const totalColumns = columns.length;
       const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
 
-      // ---------- Swipe navigation ----------
-      const pagePrev = () => setCurrentColumn(c => Math.max(0, c - COLUMNS_TO_SHOW));
-      const pageNext = () => setCurrentColumn(c => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+      // ---------- Paging (buttons + swipe) ----------
+      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
+      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
 
       const onTouchStart = (e) => {
-        // If the touch starts inside a scrollable column, we still allow swipe,
-        // but we’ll only act if it’s clearly a horizontal gesture.
-        const t = e.touches[0];
-        touchRef.current = {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        swipeRef.current = {
           active: true,
           startX: t.clientX,
           startY: t.clientY,
           lastX: t.clientX,
           lastY: t.clientY,
           decided: false,
-          isHorizontal: false
+          isHorizontal: false,
         };
       };
 
       const onTouchMove = (e) => {
-        if (!touchRef.current.active) return;
-        const t = e.touches[0];
-        const dx = t.clientX - touchRef.current.startX;
-        const dy = t.clientY - touchRef.current.startY;
+        if (!swipeRef.current.active) return;
+        const t = e.touches && e.touches[0];
+        if (!t) return;
 
-        touchRef.current.lastX = t.clientX;
-        touchRef.current.lastY = t.clientY;
+        const dx = t.clientX - swipeRef.current.startX;
+        const dy = t.clientY - swipeRef.current.startY;
 
-        // Decide gesture direction once it’s moved a bit
-        if (!touchRef.current.decided) {
+        swipeRef.current.lastX = t.clientX;
+        swipeRef.current.lastY = t.clientY;
+
+        if (!swipeRef.current.decided) {
           const adx = Math.abs(dx);
           const ady = Math.abs(dy);
           if (adx < 10 && ady < 10) return;
 
-          touchRef.current.decided = true;
-          touchRef.current.isHorizontal = adx > ady * 1.2; // clearly horizontal
+          swipeRef.current.decided = true;
+          swipeRef.current.isHorizontal = adx > ady * 1.2;
         }
 
-        // If it’s a horizontal swipe, prevent the browser from treating it as scroll
-        if (touchRef.current.isHorizontal) {
-          e.preventDefault();
+        // If it's clearly horizontal, try to prevent scroll-jank while swiping.
+        if (swipeRef.current.isHorizontal) {
+          e.preventDefault?.();
         }
       };
 
       const onTouchEnd = () => {
-        if (!touchRef.current.active) return;
+        if (!swipeRef.current.active) return;
 
-        const dx = touchRef.current.lastX - touchRef.current.startX;
-        const dy = touchRef.current.lastY - touchRef.current.startY;
+        const dx = swipeRef.current.lastX - swipeRef.current.startX;
+        const dy = swipeRef.current.lastY - swipeRef.current.startY;
 
         const adx = Math.abs(dx);
         const ady = Math.abs(dy);
 
-        // Require a fairly confident horizontal swipe
-        const SWIPE_MIN_PX = 60;
-        const SWIPE_MAX_VERTICAL = 80;
+        const SWIPE_MIN_PX = 45;
+        const SWIPE_MAX_VERTICAL = 90;
 
         if (adx >= SWIPE_MIN_PX && ady <= SWIPE_MAX_VERTICAL) {
-          if (dx > 0) {
-            // swipe right => previous columns
-            pagePrev();
-          } else {
-            // swipe left => next columns
-            pageNext();
-          }
+          if (dx > 0) pagePrev();
+          else pageNext();
         }
 
-        touchRef.current.active = false;
+        swipeRef.current.active = false;
       };
-
-      // IMPORTANT: iOS Safari needs passive:false if we call preventDefault in touchmove
-      useEffect(() => {
-        const el = document.getElementById('swipe-surface');
-        if (!el) return;
-
-        const ts = (e) => onTouchStart(e);
-        const tm = (e) => onTouchMove(e);
-        const te = () => onTouchEnd();
-
-        el.addEventListener('touchstart', ts, { passive: true });
-        el.addEventListener('touchmove', tm, { passive: false });
-        el.addEventListener('touchend', te, { passive: true });
-        el.addEventListener('touchcancel', te, { passive: true });
-
-        return () => {
-          el.removeEventListener('touchstart', ts);
-          el.removeEventListener('touchmove', tm);
-          el.removeEventListener('touchend', te);
-          el.removeEventListener('touchcancel', te);
-        };
-      }, [maxColumnIndex, COLUMNS_TO_SHOW]);
 
       // ---------- Login screen ----------
       if (!isLoggedIn) {
@@ -831,7 +812,10 @@
           <div className={`shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="h-full flex flex-col">
               <button
-                onClick={() => { setSidebarExpanded(!sidebarExpanded); bumpLayout(); }}
+                onClick={() => {
+                  setSidebarExpanded(!sidebarExpanded);
+                  bumpLayout();
+                }}
                 className={`p-4 transition-colors border-b ${darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'}`}
               >
                 <Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
@@ -933,7 +917,15 @@
 
             {/* Swipe surface wraps the columns area */}
             {columns.length > 0 && (
-              <div id="swipe-surface" className="h-screen overflow-hidden p-4 select-none">
+              <div
+                id="swipe-surface"
+                className="h-screen overflow-hidden p-4 select-none"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onTouchCancel={onTouchEnd}
+              >
                 <div className="flex gap-4">
                   {Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
                     const columnIndex = currentColumn + idx;
@@ -947,7 +939,6 @@
                           className="column-scroll space-y-4 pb-10 overflow-y-auto"
                           style={{ maxHeight: 'calc(100vh - 2rem)' }}
                           onScroll={(e) => {
-                            // scroll-sync across the visible columns
                             const top = e.currentTarget.scrollTop;
                             document.querySelectorAll('.column-scroll').forEach((el) => {
                               if (el !== e.currentTarget) el.scrollTop = top;
@@ -1009,7 +1000,9 @@
                       key={(item.post?.uri || '') + '::measure'}
                       item={item}
                       measuring={true}
-                      setRef={(el) => { measureRefs.current[i] = el; }}
+                      setRef={(el) => {
+                        measureRefs.current[i] = el;
+                      }}
                     />
                   ))}
                 </div>
