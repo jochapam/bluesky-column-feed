@@ -210,6 +210,27 @@
         }
       };
 
+const hardReset = () => {
+  try {
+    localStorage.removeItem('bluesky_session');
+    localStorage.removeItem('darkMode'); // optional: remove this line if you want to keep theme
+  } catch (e) {}
+  // Clear state
+  setIsLoggedIn(false);
+  setSession(null);
+  setPosts([]);
+  setColumns?.([]); // if you add dynamic columns later; safe if undefined
+  setHandle('');
+  setPassword('');
+  setAuthCode('');
+  setNeedsAuthCode(false);
+  setError('');
+  setCurrentColumn(0);
+
+  // Force a clean reload in Safari (helps with cached JS + fetch oddities)
+  window.location.reload();
+};
+      
       const logout = () => {
         setIsLoggedIn(false);
         setSession(null);
@@ -462,7 +483,12 @@ const fetchTimeline = async (token) => {
                 >
                   {loading ? 'Logging in...' : needsAuthCode ? 'Verify Code' : 'Login'}
                 </button>
-
+<button
+  onClick={hardReset}
+  className="w-full mt-2 text-orange-600 py-2 rounded-lg font-semibold hover:bg-orange-50 transition-colors"
+>
+  Reset Session (fix iPad stuck tab)
+</button>
                 {needsAuthCode && (
                   <button
                     onClick={() => {
@@ -558,6 +584,14 @@ const fetchTimeline = async (token) => {
                   <LogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
                   {sidebarExpanded && <span className="text-red-600">Sign Out</span>}
                 </button>
+                <button 
+  onClick={hardReset}
+  className={`w-full p-4 transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+  title="Reset saved session (fixes stuck tabs)"
+>
+  <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0" />
+  {sidebarExpanded && <span className="text-orange-500">Reset Session</span>}
+</button>
               </div>
             </div>
           </div>
