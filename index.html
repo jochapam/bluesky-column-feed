@@ -114,9 +114,8 @@
     );
 
     function BlueskyColumnFeed() {
-      // ---------- Data/UI state ----------
       const [posts, setPosts] = useState([]);
-      const [columns, setColumns] = useState([]); // packed columns (variable posts per column)
+      const [columns, setColumns] = useState([]); // packed columns
 
       const [loading, setLoading] = useState(false);
       const [currentColumn, setCurrentColumn] = useState(0);
@@ -135,37 +134,30 @@
       const [sidebarExpanded, setSidebarExpanded] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
 
-      // layout tick whenever we need to recompute packing
       const [layoutTick, setLayoutTick] = useState(0);
-
-      // refs for measurement
       const measureRefs = useRef([]);
       const rafReflowRef = useRef(null);
 
-      // swipe tracking
-      const swipeRef = useRef({
+      // Pointer swipe tracking (works reliably on iPad Safari)
+      const pointerSwipeRef = useRef({
         active: false,
+        pointerId: null,
         startX: 0,
         startY: 0,
         lastX: 0,
         lastY: 0,
-        decided: false,
-        isHorizontal: false,
       });
 
-      // ---------- Helpers ----------
       const bumpLayout = () => {
         if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
-        rafReflowRef.current = requestAnimationFrame(() => {
-          setLayoutTick((t) => t + 1);
-        });
+        rafReflowRef.current = requestAnimationFrame(() => setLayoutTick(t => t + 1));
       };
 
-      // -------- Session helpers (PDS + refresh) --------
+      // ---- Session helpers ----
       const getPdsBaseUrl = (sess) => {
         try {
-          const svc = sess?.didDoc?.service?.find(
-            (s) => typeof s?.id === 'string' && s.id.includes('#atproto_pds')
+          const svc = sess?.didDoc?.service?.find((s) =>
+            typeof s?.id === 'string' && s.id.includes('#atproto_pds')
           );
           return svc?.serviceEndpoint || 'https://bsky.social';
         } catch {
@@ -180,32 +172,20 @@
 
       const refreshAccessToken = async (sess) => {
         if (!sess?.refreshJwt) return null;
-
         const base = getPdsBaseUrl(sess);
         const resp = await fetch(`${base}/xrpc/com.atproto.server.refreshSession`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${sess.refreshJwt}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: `Bearer ${sess.refreshJwt}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
-
         if (!resp.ok) return null;
-
         const newSession = await resp.json();
         persistSession(newSession);
         return newSession.accessJwt;
       };
 
-      // Hard reset (fixes stuck tabs)
       const hardReset = () => {
-        try {
-          localStorage.removeItem('bluesky_session');
-          // keep darkMode; uncomment next line to reset theme too
-          // localStorage.removeItem('darkMode');
-        } catch (e) {}
-
+        try { localStorage.removeItem('bluesky_session'); } catch {}
         setIsLoggedIn(false);
         setSession(null);
         setPosts([]);
@@ -216,7 +196,6 @@
         setNeedsAuthCode(false);
         setError('');
         setCurrentColumn(0);
-
         window.location.reload();
       };
 
@@ -227,42 +206,38 @@
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMins / 60);
         const diffDays = Math.floor(diffHours / 24);
-
         if (diffMins < 1) return 'now';
         if (diffMins < 60) return `${diffMins}m`;
         if (diffHours < 24) return `${diffHours}h`;
         return `${diffDays}d`;
       };
 
-      // ---------- Startup: load session + theme ----------
+      // startup
       useEffect(() => {
         const savedSession = localStorage.getItem('bluesky_session');
         const savedDarkMode = localStorage.getItem('darkMode');
-
         if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
 
         if (savedSession) {
           try {
-            const sessionData = JSON.parse(savedSession);
-            setSession(sessionData);
+            const s = JSON.parse(savedSession);
+            setSession(s);
             setIsLoggedIn(true);
-            fetchTimeline(sessionData);
-          } catch (e) {
+            fetchTimeline(s);
+          } catch {
             localStorage.removeItem('bluesky_session');
           }
         }
       }, []);
 
-      // Proactive refresh: keep access token fresh in the background
+      // proactive refresh
       useEffect(() => {
         if (!session?.refreshJwt) return;
-        const id = setInterval(() => {
-          refreshAccessToken(session).catch(() => {});
-        }, 2 * 60 * 1000); // every 2 minutes
+        const id = setInterval(() => { refreshAccessToken(session).catch(() => {}); }, 2 * 60 * 1000);
         return () => clearInterval(id);
       }, [session?.refreshJwt]);
 
-      // Resize/orientation -> re-layout
+      // resize/orientation
       useEffect(() => {
         const onResize = () => bumpLayout();
         window.addEventListener('resize', onResize);
@@ -273,11 +248,10 @@
         };
       }, []);
 
-      // ---------- Actions ----------
       const toggleDarkMode = () => {
-        const newMode = !darkMode;
-        setDarkMode(newMode);
-        localStorage.setItem('darkMode', newMode);
+        const next = !darkMode;
+        setDarkMode(next);
+        localStorage.setItem('darkMode', next);
         bumpLayout();
       };
 
@@ -331,37 +305,27 @@
         localStorage.removeItem('bluesky_session');
       };
 
-      // Fetch timeline with 401 -> refresh -> retry once
       const fetchTimeline = async (sess = session) => {
         if (!sess?.accessJwt) return;
-
         setLoading(true);
         setError('');
-
         const base = getPdsBaseUrl(sess);
 
-        const doFetch = async (jwt) => {
-          return fetch(`${base}/xrpc/app.bsky.feed.getTimeline?limit=50`, {
-            headers: { Authorization: `Bearer ${jwt}` },
-          });
-        };
+        const doFetch = async (jwt) => fetch(`${base}/xrpc/app.bsky.feed.getTimeline?limit=50`, {
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
 
         try {
           let resp = await doFetch(sess.accessJwt);
-
           if (resp.status === 401) {
             const newAccess = await refreshAccessToken(sess);
             if (!newAccess) throw new Error('Session expired. Please sign in again.');
             resp = await doFetch(newAccess);
           }
-
           if (!resp.ok) {
             const err = await resp.json().catch(() => null);
-            throw new Error(
-              err?.message ? `${resp.status}: ${err.message}` : `Failed to fetch timeline: ${resp.status}`
-            );
+            throw new Error(err?.message ? `${resp.status}: ${err.message}` : `Failed to fetch timeline: ${resp.status}`);
           }
-
           const data = await resp.json();
           setPosts(data.feed || []);
           setCurrentColumn(0);
@@ -373,15 +337,13 @@
         }
       };
 
-      const refresh = () => {
-        if (session) fetchTimeline(session);
-      };
+      const refresh = () => { if (session) fetchTimeline(session); };
 
-      // ---------- Responsive column width so 3 columns fit ----------
-      const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64); // w-64 / w-16
-      const GAP_PX = 16; // gap-4
-      const PAD_PX = 16; // p-4 each side
-      const CARD_GAP_PX = 16; // space-y-4 between cards in a column
+      // ---- responsive column width ----
+      const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64);
+      const GAP_PX = 16;
+      const PAD_PX = 16;
+      const CARD_GAP_PX = 16;
 
       const columnWidthPx = useMemo(() => {
         const vw = window.innerWidth || 1024;
@@ -389,22 +351,18 @@
         return Math.max(240, Math.floor(available / COLUMNS_TO_SHOW));
       }, [sidebarExpanded, layoutTick]);
 
-      const columnStyle = useMemo(
-        () => ({
-          flex: `0 0 ${columnWidthPx}px`,
-          maxWidth: `${columnWidthPx}px`,
-          minWidth: 0,
-        }),
-        [columnWidthPx]
-      );
+      const columnStyle = useMemo(() => ({
+        flex: `0 0 ${columnWidthPx}px`,
+        maxWidth: `${columnWidthPx}px`,
+        minWidth: 0,
+      }), [columnWidthPx]);
 
-      // Matches maxHeight: calc(100vh - 2rem) = 32px
       const columnViewportHeightPx = useMemo(() => {
         const vh = window.innerHeight || 800;
-        return Math.max(200, vh - 32);
+        return Math.max(200, vh - 32); // calc(100vh - 2rem)
       }, [layoutTick]);
 
-      // ---------- Quoted posts renderer ----------
+      // ---- quoted posts renderer ----
       const renderQuotedRecord = (embed) => {
         if (!embed || !embed.$type) return null;
 
@@ -423,30 +381,17 @@
         if (!recordView || !recordView.$type) return null;
 
         const rt = recordView.$type;
-        const baseCardClass = `mt-3 rounded-lg border p-3 ${
-          darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
-        }`;
+        const baseCardClass =
+          `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
 
         if (rt === 'app.bsky.embed.record#viewNotFound') {
-          return (
-            <div className={baseCardClass}>
-              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div>
-            </div>
-          );
+          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div></div>;
         }
         if (rt === 'app.bsky.embed.record#viewBlocked') {
-          return (
-            <div className={baseCardClass}>
-              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is blocked.</div>
-            </div>
-          );
+          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is blocked.</div></div>;
         }
         if (rt === 'app.bsky.embed.record#viewDetached') {
-          return (
-            <div className={baseCardClass}>
-              <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is unavailable.</div>
-            </div>
-          );
+          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is unavailable.</div></div>;
         }
 
         if (rt === 'app.bsky.embed.record#viewRecord') {
@@ -458,19 +403,16 @@
             <div className={baseCardClass}>
               <div className="flex items-start gap-2 mb-2">
                 {author?.avatar && (
-                  <img
-                    src={author.avatar}
-                    alt={author.displayName || author.handle}
-                    className="w-7 h-7 rounded-full"
-                    onLoad={bumpLayout}
-                  />
+                  <img src={author.avatar} alt={author.displayName || author.handle} className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                     {author?.displayName || author?.handle || 'Unknown'}
                   </div>
                   {author?.handle && (
-                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{author.handle}</div>
+                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      @{author.handle}
+                    </div>
                   )}
                 </div>
               </div>
@@ -509,7 +451,7 @@
         return null;
       };
 
-      // ---------- Post Card (used for visible + measuring) ----------
+      // ---- PostCard ----
       const PostCard = ({ item, measuring = false, setRef = null }) => {
         const post = item.post;
 
@@ -518,14 +460,12 @@
           item.reason?.$type === 'app.bsky.feed.defs#skeletonReasonRepost';
 
         const reposter = isRepost ? item.reason?.by : null;
-        const repostedAt = isRepost ? item.reason?.indexedAt || item.reason?.indexed_at : null;
+        const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
 
         return (
           <div
             ref={setRef}
-            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${
-              darkMode ? 'bg-gray-800' : 'bg-white'
-            }`}
+            className={`rounded-xl shadow-lg p-4 ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
           >
             {isRepost && reposter && (
               <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -550,9 +490,13 @@
                 <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {post.author.displayName || post.author.handle}
                 </div>
-                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{post.author.handle}</div>
+                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  @{post.author.handle}
+                </div>
               </div>
-              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>{formatTimeAgo(post.indexedAt)}</span>
+              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {formatTimeAgo(post.indexedAt)}
+              </span>
             </div>
 
             {post.record?.text && (
@@ -601,20 +545,16 @@
         );
       };
 
-      // ---------- Measure + pack posts into columns (no cut-off posts) ----------
+      // ---- pack posts into columns (no cut-off posts) ----
       useEffect(() => {
-        if (!posts || posts.length === 0) {
-          setColumns([]);
-          return;
-        }
+        if (!posts || posts.length === 0) { setColumns([]); return; }
 
         measureRefs.current = measureRefs.current.slice(0, posts.length);
 
         const heights = posts.map((_, i) => {
           const el = measureRefs.current[i];
-          if (!el) return 320; // fallback until measured
-          const r = el.getBoundingClientRect();
-          return Math.ceil(r.height);
+          if (!el) return 320;
+          return Math.ceil(el.getBoundingClientRect().height);
         });
 
         const newCols = [];
@@ -623,9 +563,9 @@
 
         for (let i = 0; i < posts.length; i++) {
           const h = heights[i];
-          const addH = col.length === 0 ? h : h + CARD_GAP_PX;
+          const addH = (col.length === 0 ? h : h + CARD_GAP_PX);
 
-          if (col.length === 0 || colHeight + addH <= columnViewportHeightPx) {
+          if (col.length === 0 || (colHeight + addH) <= columnViewportHeightPx) {
             col.push(posts[i]);
             colHeight += addH;
           } else {
@@ -637,74 +577,60 @@
         if (col.length > 0) newCols.push(col);
 
         setColumns(newCols);
-        setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
+        setCurrentColumn(prev => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
       }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
 
       const totalColumns = columns.length;
       const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
 
-      // ---------- Paging (buttons + swipe) ----------
-      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
-      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+      const pagePrev = () => setCurrentColumn(c => Math.max(0, c - COLUMNS_TO_SHOW));
+      const pageNext = () => setCurrentColumn(c => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
 
-      const onTouchStart = (e) => {
-        const t = e.touches && e.touches[0];
-        if (!t) return;
-        swipeRef.current = {
-          active: true,
-          startX: t.clientX,
-          startY: t.clientY,
-          lastX: t.clientX,
-          lastY: t.clientY,
-          decided: false,
-          isHorizontal: false,
-        };
+      // ---- POINTER swipe handlers ----
+      const onPointerDown = (e) => {
+        // Only track primary finger-like pointers
+        if (e.pointerType === 'mouse') return;
+
+        pointerSwipeRef.current.active = true;
+        pointerSwipeRef.current.pointerId = e.pointerId;
+        pointerSwipeRef.current.startX = e.clientX;
+        pointerSwipeRef.current.startY = e.clientY;
+        pointerSwipeRef.current.lastX = e.clientX;
+        pointerSwipeRef.current.lastY = e.clientY;
+
+        // Capture so we keep getting events even if finger moves over children
+        e.currentTarget.setPointerCapture?.(e.pointerId);
       };
 
-      const onTouchMove = (e) => {
-        if (!swipeRef.current.active) return;
-        const t = e.touches && e.touches[0];
-        if (!t) return;
+      const onPointerMove = (e) => {
+        if (!pointerSwipeRef.current.active) return;
+        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
 
-        const dx = t.clientX - swipeRef.current.startX;
-        const dy = t.clientY - swipeRef.current.startY;
-
-        swipeRef.current.lastX = t.clientX;
-        swipeRef.current.lastY = t.clientY;
-
-        if (!swipeRef.current.decided) {
-          const adx = Math.abs(dx);
-          const ady = Math.abs(dy);
-          if (adx < 10 && ady < 10) return;
-
-          swipeRef.current.decided = true;
-          swipeRef.current.isHorizontal = adx > ady * 1.2;
-        }
-
-        // If it's clearly horizontal, try to prevent scroll-jank while swiping.
-        if (swipeRef.current.isHorizontal) {
-          e.preventDefault?.();
-        }
+        pointerSwipeRef.current.lastX = e.clientX;
+        pointerSwipeRef.current.lastY = e.clientY;
       };
 
-      const onTouchEnd = () => {
-        if (!swipeRef.current.active) return;
+      const onPointerUpOrCancel = (e) => {
+        if (!pointerSwipeRef.current.active) return;
+        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
 
-        const dx = swipeRef.current.lastX - swipeRef.current.startX;
-        const dy = swipeRef.current.lastY - swipeRef.current.startY;
+        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
+        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
 
         const adx = Math.abs(dx);
         const ady = Math.abs(dy);
 
-        const SWIPE_MIN_PX = 45;
-        const SWIPE_MAX_VERTICAL = 90;
+        // Tune for iPad: smaller threshold and require "more horizontal than vertical"
+        const SWIPE_MIN_PX = 55;
+        const HORIZONTAL_RATIO = 1.25; // adx must be >= ady * ratio
 
-        if (adx >= SWIPE_MIN_PX && ady <= SWIPE_MAX_VERTICAL) {
+        if (adx >= SWIPE_MIN_PX && adx >= ady * HORIZONTAL_RATIO) {
           if (dx > 0) pagePrev();
           else pageNext();
         }
 
-        swipeRef.current.active = false;
+        pointerSwipeRef.current.active = false;
+        pointerSwipeRef.current.pointerId = null;
       };
 
       // ---------- Login screen ----------
@@ -775,11 +701,7 @@
 
                 {needsAuthCode && (
                   <button
-                    onClick={() => {
-                      setNeedsAuthCode(false);
-                      setAuthCode('');
-                      setError('');
-                    }}
+                    onClick={() => { setNeedsAuthCode(false); setAuthCode(''); setError(''); }}
                     className="w-full text-indigo-600 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition-colors"
                   >
                     Back
@@ -812,10 +734,7 @@
           <div className={`shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="h-full flex flex-col">
               <button
-                onClick={() => {
-                  setSidebarExpanded(!sidebarExpanded);
-                  bumpLayout();
-                }}
+                onClick={() => { setSidebarExpanded(!sidebarExpanded); bumpLayout(); }}
                 className={`p-4 transition-colors border-b ${darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'}`}
               >
                 <Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
@@ -918,18 +837,21 @@
             {/* Swipe surface wraps the columns area */}
             {columns.length > 0 && (
               <div
-                id="swipe-surface"
                 className="h-screen overflow-hidden p-4 select-none"
-                style={{ touchAction: 'pan-y' }}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-                onTouchCancel={onTouchEnd}
+                style={{
+                  touchAction: 'pan-y',  // allow vertical scrolling; we detect horizontal swipes
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none'
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUpOrCancel}
+                onPointerCancel={onPointerUpOrCancel}
               >
                 <div className="flex gap-4">
                   {Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
                     const columnIndex = currentColumn + idx;
-                    if (columnIndex >= totalColumns) return null;
+                    if (columnIndex >= columns.length) return null;
 
                     const colItems = columns[columnIndex] || [];
 
@@ -1000,9 +922,7 @@
                       key={(item.post?.uri || '') + '::measure'}
                       item={item}
                       measuring={true}
-                      setRef={(el) => {
-                        measureRefs.current[i] = el;
-                      }}
+                      setRef={(el) => { measureRefs.current[i] = el; }}
                     />
                   ))}
                 </div>
