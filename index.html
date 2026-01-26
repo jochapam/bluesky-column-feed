@@ -167,6 +167,10 @@
       const [threadFocusUri, setThreadFocusUri] = useState(null);
       const [threadItems, setThreadItems] = useState([]); // flattened
 
+      // cache for parent-post previews (for replies)
+      const [postPreviewCache, setPostPreviewCache] = useState(() => ({})); // uri -> postView
+      const postPreviewInFlight = useRef(new Set());
+
       // re-layout trigger
       const [layoutTick, setLayoutTick] = useState(0);
       const measureRefs = useRef([]);
@@ -386,6 +390,23 @@
 
       const refresh = () => {
         if (session) fetchTimeline(session);
+      };
+
+      const fetchPostView = async (uri) => {
+        if (!uri || !session?.accessJwt) return null;
+        if (postPreviewCache[uri]) return postPreviewCache[uri];
+        if (postPreviewInFlight.current.has(uri)) return null;
+        postPreviewInFlight.current.add(uri);
+        try {
+          const data = await xrpcJsonWithAuth(session, `/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`);
+          const pv = data?.posts?.[0] || null;
+          if (pv) setPostPreviewCache((m) => ({ ...m, [uri]: pv }));
+          return pv;
+        } catch {
+          return null;
+        } finally {
+          postPreviewInFlight.current.delete(uri);
+        }
       };
 
       // ---- responsive column width ----
@@ -691,8 +712,13 @@
 
       // ---- Post card ----
       const PostCard = ({ item, measuring = false, setRef = null, compact = false }) => {
+        const [replyHover, setReplyHover] = useState(false);
+        const [replyLoading, setReplyLoading] = useState(false);
+        const [replyPreview, setReplyPreview] = useState(null);
         const post = item?.post;
         if (!post) return null;
+
+        const isReply = !!post?.record?.reply;
 
         const isRepost =
           item.reason?.$type === 'app.bsky.feed.defs#reasonRepost' ||
@@ -703,11 +729,45 @@
 
         const cardPad = compact ? 'p-3' : 'p-4';
 
+        const parentUri = post?.record?.reply?.parent?.uri || null;
+        const rootUri = post?.record?.reply?.root?.uri || null;
+
+        const ensureReplyPreview = async () => {
+          if (!parentUri) return;
+          if (replyPreview) return;
+          if (postPreviewCache[parentUri]) {
+            setReplyPreview(postPreviewCache[parentUri]);
+            return;
+          }
+          setReplyLoading(true);
+          const pv = await fetchPostView(parentUri);
+          setReplyPreview(pv);
+          setReplyLoading(false);
+        };
+
         return (
           <div
             ref={setRef}
             className={`rounded-xl shadow-lg ${cardPad} ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
           >
+            {isReply && !compact && (
+              <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <MessageCircle className="w-4 h-4" />
+                <button
+                  className="underline-offset-2 hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const parentUri = post?.record?.reply?.parent?.uri || post?.record?.reply?.root?.uri;
+                    if (parentUri) openThread(parentUri);
+                  }}
+                  title="View original post"
+                >
+                  Replying to another post
+                </button>
+              </div>
+            )}
+
             {isRepost && reposter && !compact && (
               <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 <Repeat className="w-4 h-4" />
@@ -740,6 +800,100 @@
               </span>
             </div>
 
+            {/* Reply context */}
+            {parentUri && !compact && (
+              <div
+                className={`-mt-1 mb-2 text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                onMouseEnter={() => {
+                  setReplyHover(true);
+                  ensureReplyPreview();
+                }}
+                onMouseLeave={() => setReplyHover(false)}
+              >
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Replying to </span>
+                <button
+                  className={`font-semibold underline decoration-dotted ${darkMode ? 'text-indigo-300 hover:text-indigo-200' : 'text-indigo-700 hover:text-indigo-800'}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openThread(parentUri);
+                  }}
+                  title="Open the post this is replying to"
+                >
+                  view parent
+                </button>
+
+                {(replyHover || replyLoading) && (
+                  <div className={`mt-2 rounded-xl border p-3 shadow-lg ${darkMode ? 'border-gray-700 bg-gray-900/60' : 'border-gray-200 bg-white'}`}>
+                    {replyLoading && !replyPreview && (
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading parent…</span>
+                      </div>
+                    )}
+
+                    {!replyLoading && !replyPreview && (
+                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                        Couldn’t load the parent post.
+                      </div>
+                    )}
+
+                    {replyPreview && (
+                      <div>
+                        <div className="flex items-start gap-2">
+                          {replyPreview.author?.avatar && (
+                            <img src={replyPreview.author.avatar} alt="" className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                              {replyPreview.author?.displayName || replyPreview.author?.handle}
+                            </div>
+                            <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              @{replyPreview.author?.handle}
+                            </div>
+                          </div>
+                          <span className={`text-[11px] ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {formatTimeAgo(replyPreview.indexedAt)}
+                          </span>
+                        </div>
+
+                        {replyPreview.record?.text && (
+                          <div className={`mt-2 text-sm whitespace-pre-wrap break-words ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                            {replyPreview.record.text}
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            className={`text-xs px-2 py-1 rounded-lg ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openThread(parentUri);
+                            }}
+                          >
+                            Open parent thread
+                          </button>
+                          {rootUri && rootUri !== parentUri && (
+                            <button
+                              className={`text-xs px-2 py-1 rounded-lg ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                openThread(rootUri);
+                              }}
+                            >
+                              Open root
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {post.record?.text && (
               <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                 {post.record.text}
@@ -771,16 +925,27 @@
             {!compact && (
               <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
                 <button
-                  className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors"
+                  className={`flex items-center gap-1.5 transition-colors ${
+                    (post.replyCount || 0) > 0
+                      ? (darkMode ? 'text-indigo-300 hover:text-indigo-200' : 'text-indigo-600 hover:text-indigo-700')
+                      : (darkMode ? 'text-gray-400 hover:text-indigo-300' : 'text-gray-500 hover:text-indigo-600')
+                  }`}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     if (post?.uri) openThread(post.uri);
                   }}
-                  title="Open thread"
+                  title={(post.replyCount || 0) > 0 ? 'Open thread (has replies)' : 'Open thread'}
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>{post.replyCount || 0}</span>
+                  {(post.replyCount || 0) > 0 ? (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${darkMode ? 'bg-indigo-500/20 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${darkMode ? 'bg-indigo-300' : 'bg-indigo-600'}`} />
+                      {post.replyCount}
+                    </span>
+                  ) : (
+                    <span className="text-xs">0</span>
+                  )}
                 </button>
                 <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors" title="Reposts">
                   <Repeat className="w-4 h-4" />
