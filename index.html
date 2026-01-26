@@ -61,6 +61,28 @@
             </svg>
         );
 
+        const Menu = ({ className }) => (
+            <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        );
+
+        const Search = ({ className }) => (
+            <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+        );
+
+        const TrendingUp = ({ className }) => (
+            <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+        );
+
         const BlueskyColumnFeed = () => {
             const [posts, setPosts] = useState([]);
             const [loading, setLoading] = useState(false);
@@ -74,7 +96,8 @@
             const [error, setError] = useState('');
 
             const POSTS_PER_COLUMN = 3;
-            const COLUMNS_TO_SHOW = 2;
+            const COLUMNS_TO_SHOW = 3;
+            const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
             // Check for saved session on load
             useEffect(() => {
@@ -301,68 +324,83 @@
             }
 
             return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-                    {/* Header */}
-                    <div className="bg-white shadow-md sticky top-0 z-10">
-                        <div className="px-4 py-3 flex items-center justify-between">
-                            <div>
-                                <h1 className="text-xl font-bold text-indigo-600">Your Timeline</h1>
-                                <p className="text-xs text-gray-500">@{session?.handle}</p>
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex">
+                    {/* Collapsible Sidebar */}
+                    <div className={`bg-white shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0`}>
+                        <div className="h-full flex flex-col">
+                            {/* Toggle Button */}
+                            <button
+                                onClick={() => setSidebarExpanded(!sidebarExpanded)}
+                                className="p-4 hover:bg-gray-100 transition-colors border-b border-gray-200"
+                            >
+                                <Menu className="w-6 h-6 text-indigo-600 mx-auto" />
+                            </button>
+
+                            {/* Sidebar Content */}
+                            <div className="flex-1 overflow-y-auto">
+                                {sidebarExpanded && (
+                                    <div className="p-4">
+                                        <h2 className="text-lg font-bold text-indigo-600 mb-1">Your Timeline</h2>
+                                        <p className="text-xs text-gray-500 mb-4">@{session?.handle}</p>
+                                    </div>
+                                )}
+
+                                <nav className="space-y-2 px-2">
+                                    <button
+                                        onClick={refresh}
+                                        disabled={loading}
+                                        className="w-full p-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-3"
+                                        title="Refresh"
+                                    >
+                                        <RefreshCw className={`w-5 h-5 text-indigo-600 flex-shrink-0 ${loading ? 'animate-spin' : ''}`} />
+                                        {sidebarExpanded && <span className="text-gray-700">Refresh</span>}
+                                    </button>
+
+                                    <button
+                                        onClick={() => setError('Search coming soon!')}
+                                        className="w-full p-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-3"
+                                        title="Search"
+                                    >
+                                        <Search className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                                        {sidebarExpanded && <span className="text-gray-700">Search</span>}
+                                    </button>
+
+                                    <button
+                                        onClick={() => setError('Popular posts coming soon!')}
+                                        className="w-full p-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-3"
+                                        title="Popular Posts"
+                                    >
+                                        <TrendingUp className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                                        {sidebarExpanded && <span className="text-gray-700">Popular Posts</span>}
+                                    </button>
+                                </nav>
                             </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={refresh}
-                                    disabled={loading}
-                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                    title="Refresh"
-                                >
-                                    <RefreshCw className={`w-5 h-5 text-indigo-600 ${loading ? 'animate-spin' : ''}`} />
-                                </button>
+
+                            {/* Sign Out at Bottom */}
+                            <div className="border-t border-gray-200">
                                 <button
                                     onClick={logout}
-                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                    title="Logout"
+                                    className="w-full p-4 hover:bg-gray-100 transition-colors flex items-center gap-3"
+                                    title="Sign Out"
                                 >
-                                    <LogOut className="w-5 h-5 text-indigo-600" />
+                                    <LogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
+                                    {sidebarExpanded && <span className="text-red-600">Sign Out</span>}
                                 </button>
                             </div>
                         </div>
-                        
+                    </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-hidden">
                         {/* Error banner */}
                         {error && (
-                            <div className="px-4 pb-3">
+                            <div className="p-4">
                                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm flex gap-2">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                                     <span>{error}</span>
                                 </div>
                             </div>
                         )}
-                        
-                        {/* Navigation */}
-                        {posts.length > 0 && (
-                            <div className="px-4 pb-3 flex items-center justify-between border-t border-gray-200 pt-3">
-                                <button
-                                    onClick={() => setCurrentColumn(Math.max(0, currentColumn - 1))}
-                                    disabled={currentColumn === 0}
-                                    className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft />
-                                </button>
-                                
-                                <span className="text-sm text-gray-600">
-                                    Columns {currentColumn + 1}-{Math.min(currentColumn + COLUMNS_TO_SHOW, totalColumns)} of {totalColumns}
-                                </span>
-                                
-                                <button
-                                    onClick={() => setCurrentColumn(Math.min(maxColumnIndex, currentColumn + 1))}
-                                    disabled={currentColumn >= maxColumnIndex}
-                                    className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronRight />
-                                </button>
-                            </div>
-                        )}
-                    </div>
 
                     {/* Loading State */}
                     {loading && posts.length === 0 && (
@@ -381,8 +419,8 @@
 
                     {/* Columns Container */}
                     {posts.length > 0 && (
-                        <div className="p-4 overflow-x-auto columns-container">
-                            <div className="flex gap-4 min-w-max">
+                        <div className="h-screen overflow-x-auto overflow-y-hidden p-4">
+                            <div className="flex gap-4 h-full">
                                 {Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
                                     const columnIndex = currentColumn + idx;
                                     if (columnIndex >= totalColumns) return null;
@@ -390,15 +428,8 @@
                                     const columnPosts = getColumnPosts(columnIndex);
                                     
                                     return (
-                                        <div key={columnIndex} className="w-80 flex-shrink-0">
-                                            <div className="bg-white rounded-xl shadow-lg p-4 mb-2">
-                                                <h2 className="text-sm font-semibold text-gray-700 text-center">
-                                                    Posts {columnIndex * POSTS_PER_COLUMN + 1}-{columnIndex * POSTS_PER_COLUMN + columnPosts.length}
-                                                </h2>
-                                            </div>
-                                            
-                                            <div className="space-y-4">
-                                                {columnPosts.map((item) => {
+                                        <div key={columnIndex} className="w-96 flex-shrink-0 overflow-y-auto">
+                                            <div className="space-y-4 pb-4">{columnPosts.map((item) => {
                                                     const post = item.post;
                                                     return (
                                                         <div key={post.uri} className="bg-white rounded-xl shadow-lg p-4 hover:shadow-xl transition-shadow">
@@ -468,7 +499,31 @@
                             </div>
                         </div>
                     )}
+
+                    {/* Navigation Arrows */}
+                    {posts.length > 0 && (
+                        <>
+                            <button
+                                onClick={() => setCurrentColumn(Math.max(0, currentColumn - 1))}
+                                disabled={currentColumn === 0}
+                                className="fixed left-20 top-1/2 -translate-y-1/2 p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed z-10"
+                                title="Previous columns"
+                            >
+                                <ChevronLeft />
+                            </button>
+                            
+                            <button
+                                onClick={() => setCurrentColumn(Math.min(maxColumnIndex, currentColumn + 1))}
+                                disabled={currentColumn >= maxColumnIndex}
+                                className="fixed right-4 top-1/2 -translate-y-1/2 p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed z-10"
+                                title="Next columns"
+                            >
+                                <ChevronRight />
+                            </button>
+                        </>
+                    )}
                 </div>
+            </div>
             );
         };
 
