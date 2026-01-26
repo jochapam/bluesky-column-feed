@@ -588,23 +588,23 @@
                     {/* Navigation Arrows */}
                     {posts.length > 0 && (
                         <>
-                            <button
-                                onClick={() => setCurrentColumn(Math.max(0, currentColumn - 1))}
-                                disabled={currentColumn === 0}
-                                className={`fixed left-20 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-                                title="Previous columns"
-                            >
-                                <ChevronLeft />
-                            </button>
-                            
-                            <button
-                                onClick={() => setCurrentColumn(Math.min(maxColumnIndex, currentColumn + 1))}
-                                disabled={currentColumn >= maxColumnIndex}
-                                className={`fixed right-4 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-                                title="Next columns"
-                            >
-                                <ChevronRight />
-                            </button>
+<button
+  onClick={() => setCurrentColumn(Math.max(0, currentColumn - COLUMNS_TO_SHOW))}
+  disabled={currentColumn === 0}
+  className={`fixed left-20 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+  title="Previous columns"
+>
+  <ChevronLeft />
+</button>
+
+<button
+  onClick={() => setCurrentColumn(Math.min(maxColumnIndex, currentColumn + COLUMNS_TO_SHOW))}
+  disabled={currentColumn >= maxColumnIndex}
+  className={`fixed right-4 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
+  title="Next columns"
+>
+  <ChevronRight />
+</button>
                         </>
                     )}
                 </div>
