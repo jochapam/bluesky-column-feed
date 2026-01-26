@@ -22,6 +22,9 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
 
+    // thread modal state
+    
+
     // --- Icons ---
     const ChevronLeft = () => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -125,6 +128,17 @@
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [session, setSession] = useState(null);
       const [error, setError] = useState('');
+
+      // --- Thread / replies modal ---
+      const [threadOpen, setThreadOpen] = useState(false);
+      const [threadLoading, setThreadLoading] = useState(false);
+      const [threadError, setThreadError] = useState('');
+      const [threadItems, setThreadItems] = useState([]); // flattened posts
+      const [threadFocusUri, setThreadFocusUri] = useState(null);
+
+      const [threadPost, setThreadPost] = useState(null);
+      const [threadReplies, setThreadReplies] = useState([]);
+      const [threadLoading, setThreadLoading] = useState(false);('');
 
       const COLUMNS_TO_SHOW = 3;
 
@@ -349,8 +363,111 @@
         }
       };
 
+      const openThread = async (item) => {
+        if (!session) return;
+        setThreadPost(item);
+        setThreadReplies([]);
+        setThreadLoading(true);
+        try {
+          const base = getPdsBaseUrl(session);
+          const resp = await fetch(`${base}/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(item.post.uri)}`, {
+            headers: { Authorization: `Bearer ${session.accessJwt}` },
+          });
+          if (!resp.ok) throw new Error('Failed to load thread');
+          const data = await resp.json();
+          setThreadReplies(data.thread?.replies || []);
+        } catch (e) {
+          setThreadReplies([]);
+        } finally {
+          setThreadLoading(false);
+        }
+      };
+
+      const closeThread = () => {
+        setThreadPost(null);
+        setThreadReplies([]);
+      };
+
       const refresh = () => {
         if (session) fetchTimeline(session);
+      };
+
+      const xrpcFetchWithAuth = async (sess, pathWithQuery) => {
+        const base = getPdsBaseUrl(sess);
+        const doFetch = async (jwt) =>
+          fetch(`${base}${pathWithQuery}`, {
+            headers: { Authorization: `Bearer ${jwt}` },
+          });
+
+        let resp = await doFetch(sess.accessJwt);
+        if (resp.status === 401) {
+          const newAccess = await refreshAccessToken(sess);
+          if (!newAccess) throw new Error('Session expired. Please sign in again.');
+          resp = await doFetch(newAccess);
+        }
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => null);
+          throw new Error(err?.message ? `${resp.status}: ${err.message}` : `Request failed: ${resp.status}`);
+        }
+        return resp.json();
+      };
+
+      const flattenThread = (node, acc, depth = 0) => {
+        if (!node) return;
+        // parent chain first
+        if (node.parent) flattenThread(node.parent, acc, depth + 1);
+        if (node.post) acc.push({ post: node.post, depth });
+        if (Array.isArray(node.replies)) {
+          for (const r of node.replies) {
+            if (r?.post) {
+              // replies depth is 0 for direct children; indent them slightly
+              acc.push({ post: r.post, depth: 1 });
+              // show grandchildren if present (depth=2)
+              if (Array.isArray(r.replies)) {
+                for (const rr of r.replies) {
+                  if (rr?.post) acc.push({ post: rr.post, depth: 2 });
+                }
+              }
+            }
+          }
+        }
+      };
+
+      const openThread = async (uri) => {
+        if (!session?.accessJwt) return;
+        setThreadOpen(true);
+        setThreadLoading(true);
+        setThreadError('');
+        setThreadItems([]);
+        setThreadFocusUri(uri);
+        try {
+          const data = await xrpcFetchWithAuth(session, `/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=2&parentHeight=8`);
+          const acc = [];
+          flattenThread(data?.thread, acc, 0);
+          // de-dupe by uri (parent recursion can repeat in odd cases)
+          const seen = new Set();
+          const unique = [];
+          for (const it of acc) {
+            const u = it?.post?.uri;
+            if (!u) continue;
+            if (seen.has(u)) continue;
+            seen.add(u);
+            unique.push(it);
+          }
+          setThreadItems(unique);
+        } catch (e) {
+          setThreadError(e?.message || 'Failed to load thread');
+        } finally {
+          setThreadLoading(false);
+        }
+      };
+
+      const closeThread = () => {
+        setThreadOpen(false);
+        setThreadLoading(false);
+        setThreadError('');
+        setThreadItems([]);
+        setThreadFocusUri(null);
       };
 
       // ---- responsive column width ----
@@ -471,7 +588,7 @@
         return null;
       };
 
-      const PostCard = ({ item, measuring = false, setRef = null }) => {
+      const PostCard = ({ item, measuring = false, setRef = null, onOpenThread }) => {
         const post = item.post;
 
         const isRepost =
@@ -547,7 +664,14 @@
             {renderQuotedRecord(post.embed)}
 
             <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
-              <button className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors">
+              <button
+                className="flex items-center gap-1.5 hover:text-indigo-500 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (post?.uri) openThread(post.uri);
+                }}
+                title="Open thread"
+              >
                 <MessageCircle className="w-4 h-4" />
                 <span>{post.replyCount || 0}</span>
               </button>
@@ -770,7 +894,7 @@
                 )}
 
                 {colItems.map((item) => (
-                  <PostCard
+                  <PostCard onOpenThread={openThread}
                     key={(item.post?.uri || '') + '::' + (item.reason?.by?.did || '') + '::' + (item.reason?.indexedAt || '') + `::${keyPrefix}`}
                     item={item}
                   />
@@ -996,6 +1120,7 @@
             {columns.length > 0 && (
               <div
                 className="h-screen overflow-hidden p-4 select-none"
+                // swipe surface
                 style={{
                   touchAction: 'pan-y',
                   WebkitUserSelect: 'none',
@@ -1023,6 +1148,125 @@
                   {renderPage(currentColumn - COLUMNS_TO_SHOW, 'prev')}
                   {renderPage(currentColumn, 'cur')}
                   {renderPage(currentColumn + COLUMNS_TO_SHOW, 'next')}
+                </div>
+              </div>
+            )}
+
+            {threadOpen && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center"
+                role="dialog"
+                aria-modal="true"
+                onClick={closeThread}
+              >
+                <div className={`absolute inset-0 ${darkMode ? 'bg-black/70' : 'bg-black/50'}`} />
+
+                <div
+                  className={`relative w-[min(900px,95vw)] max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className={`flex items-center justify-between px-4 py-3 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <div className="font-semibold">Thread</div>
+                    <div className="flex items-center gap-2">
+                      {threadFocusUri && (
+                        <button
+                          className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
+                          onClick={() => openThread(threadFocusUri)}
+                          disabled={threadLoading}
+                        >
+                          {threadLoading ? 'Loading…' : 'Refresh'}
+                        </button>
+                      )}
+                      <button
+                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
+                        onClick={closeThread}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  {threadError && (
+                    <div className="p-4">
+                      <div className={`px-3 py-2 rounded-lg text-sm flex gap-2 ${darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{threadError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-4 overflow-y-auto column-scroll" style={{ maxHeight: 'calc(85vh - 56px)' }}>
+                    {threadLoading && threadItems.length === 0 && (
+                      <div className="py-10 text-center">
+                        <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
+                        <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading thread…</div>
+                      </div>
+                    )}
+
+                    {!threadLoading && threadItems.length === 0 && !threadError && (
+                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>No thread data.</div>
+                    )}
+
+                    <div className="space-y-4">
+                      {threadItems.map((it) => (
+                        <div key={it.post.uri} className={it.depth ? `pl-${Math.min(it.depth * 4, 8)}` : ''}>
+                          {/* Compact thread card */}
+                          <div className={`rounded-xl shadow-lg p-4 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                            <div className="flex items-start gap-3 mb-2">
+                              {it.post.author?.avatar && (
+                                <img
+                                  src={it.post.author.avatar}
+                                  alt={it.post.author.displayName || it.post.author.handle}
+                                  className="w-9 h-9 rounded-full"
+                                  onLoad={bumpLayout}
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                  {it.post.author?.displayName || it.post.author?.handle}
+                                </div>
+                                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  @{it.post.author?.handle}
+                                </div>
+                              </div>
+                              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {formatTimeAgo(it.post.indexedAt)}
+                              </span>
+                            </div>
+
+                            {it.post.record?.text && (
+                              <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                                {it.post.record.text}
+                              </p>
+                            )}
+
+                            {it.post.embed?.images && it.post.embed.images.length > 0 && (
+                              <div className="mt-3">
+                                <img src={it.post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
+                              </div>
+                            )}
+
+                            {it.post.embed?.external && (
+                              <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                                {it.post.embed.external.thumb && (
+                                  <img src={it.post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
+                                )}
+                                <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                  {it.post.embed.external.title}
+                                </div>
+                                <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {it.post.embed.external.uri}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Show quoted posts inside thread too */}
+                            {renderQuotedRecord(it.post.embed)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1063,7 +1307,7 @@
               >
                 <div className="space-y-4">
                   {posts.map((item, i) => (
-                    <PostCard
+                    <PostCard onOpenThread={openThread}
                       key={(item.post?.uri || '') + '::measure'}
                       item={item}
                       measuring={true}
