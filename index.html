@@ -300,6 +300,128 @@
       },
     };
 
+    // ==================== RICH TEXT COMPONENT ====================
+    const RichText = ({ text, facets, darkMode }) => {
+      if (!text) return null;
+      if (!facets || facets.length === 0) {
+        return <>{text}</>;
+      }
+
+      // Convert string to bytes for proper indexing (facets use byte offsets)
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      const bytes = encoder.encode(text);
+
+      // Sort facets by start index
+      const sortedFacets = [...facets].sort((a, b) =>
+        (a.index?.byteStart || 0) - (b.index?.byteStart || 0)
+      );
+
+      const segments = [];
+      let lastEnd = 0;
+
+      for (const facet of sortedFacets) {
+        const start = facet.index?.byteStart ?? 0;
+        const end = facet.index?.byteEnd ?? 0;
+
+        // Add text before this facet
+        if (start > lastEnd) {
+          const beforeBytes = bytes.slice(lastEnd, start);
+          segments.push({
+            text: decoder.decode(beforeBytes),
+            facet: null,
+          });
+        }
+
+        // Add the faceted text
+        const facetBytes = bytes.slice(start, end);
+        segments.push({
+          text: decoder.decode(facetBytes),
+          facet: facet,
+        });
+
+        lastEnd = end;
+      }
+
+      // Add remaining text after last facet
+      if (lastEnd < bytes.length) {
+        const remainingBytes = bytes.slice(lastEnd);
+        segments.push({
+          text: decoder.decode(remainingBytes),
+          facet: null,
+        });
+      }
+
+      const linkClass = darkMode
+        ? 'text-blue-400 hover:text-blue-300 underline'
+        : 'text-blue-600 hover:text-blue-700 underline';
+
+      return (
+        <>
+          {segments.map((segment, i) => {
+            if (!segment.facet) {
+              return <React.Fragment key={i}>{segment.text}</React.Fragment>;
+            }
+
+            const feature = segment.facet.features?.[0];
+            if (!feature) {
+              return <React.Fragment key={i}>{segment.text}</React.Fragment>;
+            }
+
+            // Handle links
+            if (feature.$type === 'app.bsky.richtext.facet#link') {
+              return (
+                <a
+                  key={i}
+                  href={feature.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={linkClass}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {segment.text}
+                </a>
+              );
+            }
+
+            // Handle mentions
+            if (feature.$type === 'app.bsky.richtext.facet#mention') {
+              return (
+                <a
+                  key={i}
+                  href={`https://bsky.app/profile/${feature.did}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={linkClass}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {segment.text}
+                </a>
+              );
+            }
+
+            // Handle hashtags
+            if (feature.$type === 'app.bsky.richtext.facet#tag') {
+              return (
+                <a
+                  key={i}
+                  href={`https://bsky.app/hashtag/${encodeURIComponent(feature.tag)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={linkClass}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {segment.text}
+                </a>
+              );
+            }
+
+            return <React.Fragment key={i}>{segment.text}</React.Fragment>;
+          })}
+        </>
+      );
+    };
+
     // ==================== ERROR BOUNDARY ====================
     class ErrorBoundary extends React.Component {
       constructor(props) {
@@ -833,7 +955,7 @@
               <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
                 darkMode ? 'text-gray-200' : 'text-gray-800'
               }`}>
-                {quotedText}
+                <RichText text={quotedText} facets={value.facets} darkMode={darkMode} />
               </p>
             ) : (
               <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -855,7 +977,13 @@
             )}
 
             {mediaView?.$type === 'app.bsky.embed.external#view' && mediaView.external && (
-              <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <a
+                href={mediaView.external.uri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mt-3 border rounded-lg p-3 block hover:opacity-80 transition-opacity ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 {mediaView.external.thumb && (
                   <img loading="lazy"
                     src={mediaView.external.thumb}
@@ -872,7 +1000,7 @@
                 <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   {mediaView.external.uri}
                 </div>
-              </div>
+              </a>
             )}
           </div>
         );
@@ -891,6 +1019,7 @@
       const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
 
       const cardPad = compact ? 'p-3' : 'p-4';
+      const record = post.record || {};
 
       return (
         <article
@@ -955,11 +1084,11 @@
             </time>
           </div>
 
-          {post.record?.text && (
+          {record.text && (
             <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
               darkMode ? 'text-gray-200' : 'text-gray-800'
             }`}>
-              {post.record.text}
+              <RichText text={record.text} facets={record.facets} darkMode={darkMode} />
             </p>
           )}
 
@@ -977,7 +1106,13 @@
           )}
 
           {post.embed?.external && (
-            <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <a
+              href={post.embed.external.uri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-3 border rounded-lg p-3 block hover:opacity-80 transition-opacity ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
               {post.embed.external.thumb && (
                 <img loading="lazy"
                   src={post.embed.external.thumb}
@@ -994,7 +1129,7 @@
               <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 {post.embed.external.uri}
               </div>
-            </div>
+            </a>
           )}
 
           <QuotedRecord embed={post.embed} darkMode={darkMode} bumpLayout={bumpLayout} />
@@ -1314,6 +1449,8 @@
     };
 
     const ThreadPost = ({ post, darkMode, bumpLayout }) => {
+      const record = post.record || {};
+
       return (
         <article
           className={`rounded-xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-4`}
@@ -1346,11 +1483,11 @@
             </time>
           </div>
 
-          {post.record?.text && (
+          {record.text && (
             <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
               darkMode ? 'text-gray-200' : 'text-gray-800'
             }`}>
-              {post.record.text}
+              <RichText text={record.text} facets={record.facets} darkMode={darkMode} />
             </p>
           )}
 
@@ -1368,7 +1505,13 @@
           )}
 
           {post.embed?.external && (
-            <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <a
+              href={post.embed.external.uri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-3 border rounded-lg p-3 block hover:opacity-80 transition-opacity ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
               {post.embed.external.thumb && (
                 <img loading="lazy"
                   src={post.embed.external.thumb}
@@ -1385,7 +1528,7 @@
               <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 {post.embed.external.uri}
               </div>
-            </div>
+            </a>
           )}
 
           <QuotedRecord embed={post.embed} darkMode={darkMode} bumpLayout={bumpLayout} />
