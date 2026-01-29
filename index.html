@@ -472,7 +472,7 @@
         }
 
         return response.json();
-      }, [session, refreshAccessToken]);
+      }, [session?.accessJwt, session?.did, refreshAccessToken]);
 
       return { makeAuthenticatedRequest };
     };
@@ -1450,9 +1450,17 @@
 
         const restoredSession = auth.restoreSession();
         if (restoredSession) {
-          fetchTimeline(restoredSession);
+          // Use setTimeout to ensure state is updated before fetching
+          setTimeout(() => fetchTimeline(restoredSession), 0);
         }
       }, []);
+
+      // Fetch timeline when session changes
+      useEffect(() => {
+        if (auth.isLoggedIn && auth.session && posts.length === 0 && !loading) {
+          fetchTimeline(auth.session);
+        }
+      }, [auth.isLoggedIn, auth.session]);
 
       // Token refresh interval
       useEffect(() => {
@@ -1522,7 +1530,37 @@
         setError('');
 
         try {
-          const data = await makeAuthenticatedRequest(`${API_ENDPOINTS.GET_TIMELINE}?limit=50`);
+          const base = Utils.getPdsBaseUrl(sess);
+          const doFetch = async (jwt) => {
+            return fetch(`${base}${API_ENDPOINTS.GET_TIMELINE}?limit=50`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${jwt}`,
+              },
+            });
+          };
+
+          let response = await doFetch(sess.accessJwt);
+
+          // Handle token expiration
+          if (response.status === 401) {
+            const newAccessToken = await auth.refreshAccessToken(sess);
+            if (!newAccessToken) {
+              throw new Error('Session expired. Please sign in again.');
+            }
+            response = await doFetch(newAccessToken);
+          }
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(
+              errorData?.message 
+                ? `${response.status}: ${errorData.message}` 
+                : `Request failed: ${response.status}`
+            );
+          }
+
+          const data = await response.json();
           setPosts(data.feed || []);
           setCurrentColumn(0);
           setDragX(0);
@@ -1533,7 +1571,7 @@
         } finally {
           setLoading(false);
         }
-      }, [auth.session, makeAuthenticatedRequest, bumpLayout]);
+      }, [auth.refreshAccessToken, bumpLayout]);
 
       const handleLogout = useCallback(() => {
         auth.clearSession();
