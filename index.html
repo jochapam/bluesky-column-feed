@@ -1582,7 +1582,6 @@
       });
 
       // Refs
-      const measureRefs = useRef([]);
       const columnScrollRefs = useRef(new Map());
       const horizontalScrollRef = useRef(null);
 
@@ -1781,43 +1780,19 @@
         });
       }, []);
 
-      // Pack posts into columns
+      // Pack posts into columns - 1 post per column for clean layout
       useEffect(() => {
         if (!posts || posts.length === 0) {
           setColumns([]);
           return;
         }
 
-        measureRefs.current = measureRefs.current.slice(0, posts.length);
-
-        const heights = posts.map((_, i) => {
-          const el = measureRefs.current[i];
-          if (!el) return CONSTANTS.MIN_CARD_HEIGHT;
-          return Math.ceil(el.getBoundingClientRect().height);
-        });
-
-        const newCols = [];
-        let col = [];
-        let colHeight = 0;
-
-        for (let i = 0; i < posts.length; i++) {
-          const h = heights[i];
-          const addH = col.length === 0 ? h : h + CONSTANTS.CARD_GAP_PX;
-
-          if (col.length === 0 || colHeight + addH <= columnViewportHeightPx) {
-            col.push(posts[i]);
-            colHeight += addH;
-          } else {
-            newCols.push(col);
-            col = [posts[i]];
-            colHeight = h;
-          }
-        }
-        if (col.length > 0) newCols.push(col);
+        // Simple: 1 post per column - guarantees no overflow
+        const newCols = posts.map(post => [post]);
 
         setColumns(newCols);
         setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - CONSTANTS.COLUMNS_TO_SHOW)));
-      }, [posts, columnWidthPx, columnViewportHeightPx, darkMode]);
+      }, [posts]);
 
       // Navigation
       const totalColumns = columns.length;
@@ -1998,35 +1973,6 @@
               bumpLayout={bumpLayout}
             />
 
-            {/* Hidden measurement column */}
-            {posts.length > 0 && (
-              <div
-                style={{
-                  position: 'fixed',
-                  left: -10000,
-                  top: 0,
-                  width: columnWidthPx + 'px',
-                  pointerEvents: 'none',
-                  opacity: 0,
-                }}
-                aria-hidden="true"
-              >
-                <div className="space-y-4">
-                  {posts.map((item, i) => (
-                    <PostCard
-                      key={`${item.post?.uri || ''}-measure`}
-                      item={item}
-                      darkMode={darkMode}
-                      bumpLayout={bumpLayout}
-                      onOpenThread={openThread}
-                      setRef={(el) => {
-                        measureRefs.current[i] = el;
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
           </main>
         </div>
       );
