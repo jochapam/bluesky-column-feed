@@ -1668,11 +1668,15 @@
       const maxColumnIndex = Math.max(0, totalColumns - CONSTANTS.COLUMNS_TO_SHOW);
 
       const animateDragTo = useCallback((targetDragX, onDone) => {
-        setIsAnimating(true);
         setDragX(targetDragX);
         setTimeout(() => {
-          setIsAnimating(false);
+          // Disable transitions before resetting state
+          setIsAnimating(true);
           onDone?.();
+          // Re-enable transitions after the state update is painted
+          requestAnimationFrame(() => {
+            setIsAnimating(false);
+          });
         }, CONSTANTS.SWIPE_ANIMATION_DURATION);
       }, []);
 
@@ -1902,7 +1906,7 @@
                   className="flex gap-4"
                   style={{
                     transform: `translate3d(${-pageWidthPx + dragX}px, 0, 0)`,
-                    transition: isDragging ? 'none' : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    transition: (isDragging || isAnimating) ? 'none' : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                     willChange: 'transform',
                   }}
                 >
