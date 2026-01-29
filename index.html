@@ -650,6 +650,7 @@
 
       const columnViewportHeightPx = useMemo(() => {
         const vh = window.innerHeight || 800;
+        // Account for container padding (p-4 = 16px top + 16px bottom = 32px)
         return Math.max(200, vh - 32);
       }, [layoutTick]);
 
@@ -1877,8 +1878,8 @@
         return (
           <div key={`col-${columnIndex}`} className="flex-shrink-0" style={columnStyle}>
             <div
-              className="column-scroll space-y-4 pb-10 overflow-y-auto"
-              style={{ maxHeight: 'calc(100vh - 2rem)' }}
+              className="space-y-4 overflow-hidden"
+              style={{ height: `${columnViewportHeightPx}px` }}
               ref={(el) => {
                 if (el) columnScrollRefs.current.set(columnIndex, el);
                 else columnScrollRefs.current.delete(columnIndex);
@@ -1896,7 +1897,7 @@
             </div>
           </div>
         );
-      }, [columns, columnWidthPx, darkMode, bumpLayout, openThread]);
+      }, [columns, columnWidthPx, columnViewportHeightPx, darkMode, bumpLayout, openThread]);
 
       if (!auth.isLoggedIn) {
         return <LoginScreen onLogin={auth.persistSession} />;
