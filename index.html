@@ -77,6 +77,26 @@
       background-color: rgba(255, 255, 255, 0.2);
     }
 
+    /* Horizontal scroll snap for column navigation */
+    .columns-container {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .columns-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .column-group {
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      flex-shrink: 0;
+    }
+
     /* Optimize images for better scroll performance */
     img {
       contain: layout;
@@ -1560,17 +1580,10 @@
         items: [],
       });
 
-      // Swipe state
-      const [dragX, setDragX] = useState(0);
-      const [isDragging, setIsDragging] = useState(false);
-      const [isAnimating, setIsAnimating] = useState(false);
-      const [isSwapping, setIsSwapping] = useState(false);
-
       // Refs
       const measureRefs = useRef([]);
       const columnScrollRefs = useRef(new Map());
-      const pointerSwipeRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0 });
-      const velocityRef = useRef({ v: 0, lastX: 0, lastT: 0 });
+      const horizontalScrollRef = useRef(null);
 
       // Initialize
       useEffect(() => {
@@ -1673,7 +1686,6 @@
           const data = await response.json();
           setPosts(data.feed || []);
           setCurrentColumn(0);
-          setDragX(0);
 
         } catch (err) {
           console.error('Error fetching timeline:', err);
@@ -1688,7 +1700,6 @@
         setPosts([]);
         setColumns([]);
         setCurrentColumn(0);
-        setDragX(0);
       }, [auth]);
 
       const handleReset = useCallback(() => {
@@ -1807,191 +1818,84 @@
         setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - CONSTANTS.COLUMNS_TO_SHOW)));
       }, [posts, columnWidthPx, columnViewportHeightPx, darkMode]);
 
-      // Swipe handlers
+      // Navigation
       const totalColumns = columns.length;
       const maxColumnIndex = Math.max(0, totalColumns - CONSTANTS.COLUMNS_TO_SHOW);
 
-      const animateDragTo = useCallback((targetDragX, onDone) => {
-        setDragX(targetDragX);
-        setTimeout(() => {
-          // Fade out, swap content, then fade in
-          setIsSwapping(true);
-          setIsAnimating(true);
-
-          // Wait for fade out, then swap
-          setTimeout(() => {
-            onDone?.();
-
-            // Wait a frame for React to update, then fade back in
-            requestAnimationFrame(() => {
-              setIsSwapping(false);
-              setIsAnimating(false);
-            });
-          }, 50); // Brief delay for fade out
-        }, CONSTANTS.SWIPE_ANIMATION_DURATION);
-      }, []);
-
-      const goNextWithAnimation = useCallback(() => {
-        if (currentColumn >= maxColumnIndex) {
-          animateDragTo(0, () => setDragX(0));
-          return;
+      // Scroll to current column when it changes
+      useEffect(() => {
+        if (horizontalScrollRef.current && columns.length > 0) {
+          const scrollTarget = currentColumn * (columnWidthPx + CONSTANTS.GAP_PX);
+          horizontalScrollRef.current.scrollTo({
+            left: scrollTarget,
+            behavior: 'smooth'
+          });
         }
-        animateDragTo(-pageWidthPx, () => {
-          setCurrentColumn((c) => Math.min(maxColumnIndex, c + CONSTANTS.COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
-      }, [currentColumn, maxColumnIndex, pageWidthPx, animateDragTo]);
+      }, [currentColumn, columnWidthPx, columns.length]);
 
-      const goPrevWithAnimation = useCallback(() => {
-        if (currentColumn === 0) {
-          animateDragTo(0, () => setDragX(0));
-          return;
+      // Handle scroll end to update currentColumn state
+      const handleScroll = useCallback(() => {
+        if (!horizontalScrollRef.current) return;
+
+        const scrollLeft = horizontalScrollRef.current.scrollLeft;
+        const columnWidth = columnWidthPx + CONSTANTS.GAP_PX;
+        const newColumn = Math.round(scrollLeft / columnWidth);
+
+        if (newColumn !== currentColumn && newColumn >= 0 && newColumn <= maxColumnIndex) {
+          setCurrentColumn(newColumn);
         }
-        animateDragTo(pageWidthPx, () => {
-          setCurrentColumn((c) => Math.max(0, c - CONSTANTS.COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
-      }, [currentColumn, pageWidthPx, animateDragTo]);
+      }, [columnWidthPx, currentColumn, maxColumnIndex]);
 
-      const onPointerDown = useCallback((e) => {
-        if (e.pointerType === 'mouse' || isAnimating) return;
-
-        pointerSwipeRef.current = {
-          active: true,
-          pointerId: e.pointerId,
-          startX: e.clientX,
-          startY: e.clientY,
-          lastX: e.clientX,
-          lastY: e.clientY,
-        };
-
-        velocityRef.current = {
-          v: 0,
-          lastX: e.clientX,
-          lastT: performance.now(),
-        };
-
-        setIsDragging(true);
-        setDragX(0);
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-      }, [isAnimating]);
-
-      const onPointerMove = useCallback((e) => {
-        if (!pointerSwipeRef.current.active || pointerSwipeRef.current.pointerId !== e.pointerId) {
-          return;
+      // Debounced scroll handler
+      const scrollTimeoutRef = useRef(null);
+      const onScroll = useCallback(() => {
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
         }
-
-        pointerSwipeRef.current.lastX = e.clientX;
-        pointerSwipeRef.current.lastY = e.clientY;
-
-        const dx = e.clientX - pointerSwipeRef.current.startX;
-        const dy = e.clientY - pointerSwipeRef.current.startY;
-
-        // Ignore vertical scrolls
-        if (Math.abs(dy) > Math.abs(dx) * 1.1) return;
-
-        const now = performance.now();
-        const dt = Math.max(1, now - velocityRef.current.lastT);
-        const instV = (e.clientX - velocityRef.current.lastX) / dt;
-        velocityRef.current.v = velocityRef.current.v * 0.8 + instV * 0.2;
-        velocityRef.current.lastX = e.clientX;
-        velocityRef.current.lastT = now;
-
-        const maxPull = pageWidthPx * CONSTANTS.SWIPE_MAX_PULL_RATIO;
-        let finalDx = Utils.clamp(dx, -maxPull, maxPull);
-
-        const atStart = currentColumn === 0;
-        const atEnd = currentColumn >= maxColumnIndex;
-
-        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
-          finalDx *= CONSTANTS.SWIPE_RESISTANCE_FACTOR;
-        }
-
-        setDragX(finalDx);
-      }, [pageWidthPx, currentColumn, maxColumnIndex]);
-
-      const onPointerUpOrCancel = useCallback(() => {
-        if (!pointerSwipeRef.current.active) return;
-
-        pointerSwipeRef.current.active = false;
-        pointerSwipeRef.current.pointerId = null;
-        setIsDragging(false);
-
-        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
-        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
-
-        if (Math.abs(dy) > Math.abs(dx) * 0.9) {
-          animateDragTo(0, () => setDragX(0));
-          return;
-        }
-
-        const v = velocityRef.current.v;
-        const projectedDx = dx + v * CONSTANTS.SWIPE_PROJECTION_MS;
-        const distanceThreshold = Math.min(
-          CONSTANTS.SWIPE_DISTANCE_THRESHOLD_PX,
-          pageWidthPx * CONSTANTS.SWIPE_DISTANCE_THRESHOLD_RATIO
-        );
-
-        const shouldGoNext = projectedDx < -distanceThreshold || v < -CONSTANTS.SWIPE_VELOCITY_THRESHOLD;
-        const shouldGoPrev = projectedDx > distanceThreshold || v > CONSTANTS.SWIPE_VELOCITY_THRESHOLD;
-
-        if (shouldGoNext) return goNextWithAnimation();
-        if (shouldGoPrev) return goPrevWithAnimation();
-
-        animateDragTo(0, () => setDragX(0));
-      }, [pageWidthPx, animateDragTo, goNextWithAnimation, goPrevWithAnimation]);
+        scrollTimeoutRef.current = setTimeout(handleScroll, 100);
+      }, [handleScroll]);
 
       const pagePrev = useCallback(() => {
-        setCurrentColumn((c) => Math.max(0, c - CONSTANTS.COLUMNS_TO_SHOW));
-      }, []);
+        const newColumn = Math.max(0, currentColumn - CONSTANTS.COLUMNS_TO_SHOW);
+        setCurrentColumn(newColumn);
+      }, [currentColumn]);
 
       const pageNext = useCallback(() => {
-        setCurrentColumn((c) => Math.min(maxColumnIndex, c + CONSTANTS.COLUMNS_TO_SHOW));
-      }, [maxColumnIndex]);
+        const newColumn = Math.min(maxColumnIndex, currentColumn + CONSTANTS.COLUMNS_TO_SHOW);
+        setCurrentColumn(newColumn);
+      }, [currentColumn, maxColumnIndex]);
 
-      const renderPage = useCallback((startIdx, keyPrefix) => {
+      const renderColumn = useCallback((columnIndex) => {
         const columnStyle = {
           flex: `0 0 ${columnWidthPx}px`,
           maxWidth: `${columnWidthPx}px`,
           minWidth: 0,
         };
 
-        return Array.from({ length: CONSTANTS.COLUMNS_TO_SHOW }).map((_, idx) => {
-          const columnIndex = startIdx + idx;
-          const isValid = columnIndex >= 0 && columnIndex < columns.length;
-          const colItems = isValid ? (columns[columnIndex] || []) : [];
+        const colItems = columns[columnIndex] || [];
 
-          return (
-            <div key={`${keyPrefix}-${idx}-${columnIndex}`} className="flex-shrink-0" style={columnStyle}>
-              <div
-                className={`column-scroll space-y-4 pb-10 overflow-y-auto ${isValid ? '' : 'opacity-40'}`}
-                style={{ maxHeight: 'calc(100vh - 2rem)' }}
-                ref={(el) => {
-                  if (el) columnScrollRefs.current.set(columnIndex, el);
-                  else columnScrollRefs.current.delete(columnIndex);
-                }}
-              >
-                {!isValid && (
-                  <div className={`rounded-2xl p-4 ${
-                    darkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-400'
-                  } shadow-lg`}>
-                    <div className="text-sm">No more columns</div>
-                  </div>
-                )}
-
-                {colItems.map((item) => (
-                  <PostCard
-                    key={`${item.post?.uri || ''}-${item.reason?.by?.did || ''}-${item.reason?.indexedAt || ''}-${keyPrefix}`}
-                    item={item}
-                    darkMode={darkMode}
-                    bumpLayout={bumpLayout}
-                    onOpenThread={openThread}
-                  />
-                ))}
-              </div>
+        return (
+          <div key={`col-${columnIndex}`} className="flex-shrink-0" style={columnStyle}>
+            <div
+              className="column-scroll space-y-4 pb-10 overflow-y-auto"
+              style={{ maxHeight: 'calc(100vh - 2rem)' }}
+              ref={(el) => {
+                if (el) columnScrollRefs.current.set(columnIndex, el);
+                else columnScrollRefs.current.delete(columnIndex);
+              }}
+            >
+              {colItems.map((item) => (
+                <PostCard
+                  key={`${item.post?.uri || ''}-${item.reason?.by?.did || ''}-${item.reason?.indexedAt || ''}`}
+                  item={item}
+                  darkMode={darkMode}
+                  bumpLayout={bumpLayout}
+                  onOpenThread={openThread}
+                />
+              ))}
             </div>
-          );
-        });
+          </div>
+        );
       }, [columns, columnWidthPx, darkMode, bumpLayout, openThread]);
 
       if (!auth.isLoggedIn) {
@@ -2046,28 +1950,12 @@
 
             {columns.length > 0 && (
               <div
-                className="h-screen overflow-hidden p-4 select-none"
-                style={{ touchAction: 'pan-y', WebkitUserSelect: 'none', userSelect: 'none' }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUpOrCancel}
-                onPointerCancel={onPointerUpOrCancel}
+                ref={horizontalScrollRef}
+                className="columns-container h-screen p-4"
+                style={{ gap: `${CONSTANTS.GAP_PX}px` }}
+                onScroll={onScroll}
               >
-                <div
-                  className="flex gap-4"
-                  style={{
-                    transform: `translate3d(${-pageWidthPx + dragX}px, 0, 0)`,
-                    transition: (isDragging || isAnimating)
-                      ? 'opacity 50ms ease-out'
-                      : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 50ms ease-out',
-                    opacity: isSwapping ? 0 : 1,
-                    willChange: 'transform, opacity',
-                  }}
-                >
-                  {renderPage(currentColumn - CONSTANTS.COLUMNS_TO_SHOW, 'prev')}
-                  {renderPage(currentColumn, 'cur')}
-                  {renderPage(currentColumn + CONSTANTS.COLUMNS_TO_SHOW, 'next')}
-                </div>
+                {columns.map((_, idx) => renderColumn(idx))}
               </div>
             )}
 
