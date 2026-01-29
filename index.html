@@ -1433,9 +1433,6 @@
       const columnScrollRefs = useRef(new Map());
       const pointerSwipeRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0 });
       const velocityRef = useRef({ v: 0, lastX: 0, lastT: 0 });
-      const isSyncingScrollRef = useRef(false);
-      const rafIdRef = useRef(null);
-      const lastScrollTopRef = useRef(0);
 
       // Initialize
       useEffect(() => {
@@ -1478,51 +1475,8 @@
       // Cleanup
       useEffect(() => {
         return () => {
-          if (rafIdRef.current) {
-            cancelAnimationFrame(rafIdRef.current);
-          }
           columnScrollRefs.current.clear();
         };
-      }, []);
-
-      const syncScrollTop = useCallback((fromEl, top) => {
-        // Skip if we're already syncing to prevent loops
-        if (isSyncingScrollRef.current) return;
-
-        // Cancel any pending sync
-        if (rafIdRef.current != null) {
-          cancelAnimationFrame(rafIdRef.current);
-        }
-
-        // Store the target scroll position
-        lastScrollTopRef.current = top;
-
-        // Throttle updates to animation frame
-        rafIdRef.current = requestAnimationFrame(() => {
-          rafIdRef.current = null;
-          
-          // Set sync flag to prevent feedback loops
-          isSyncingScrollRef.current = true;
-
-          const targetTop = lastScrollTopRef.current;
-          
-          // Sync all other columns
-          for (const el of columnScrollRefs.current.values()) {
-            if (!el || el === fromEl) continue;
-            
-            // Only update if difference is significant (reduces jitter)
-            const diff = Math.abs(el.scrollTop - targetTop);
-            if (diff > 2) {
-              el.scrollTop = targetTop;
-            }
-          }
-
-          // Use setTimeout to clear the sync flag after the browser has rendered
-          // This prevents the flash effect on touch devices
-          setTimeout(() => {
-            isSyncingScrollRef.current = false;
-          }, 0);
-        });
       }, []);
 
       const toggleDarkMode = useCallback(() => {
@@ -1867,11 +1821,6 @@
                   if (el) columnScrollRefs.current.set(columnIndex, el);
                   else columnScrollRefs.current.delete(columnIndex);
                 }}
-                onScroll={(e) => {
-                  if (!isSyncingScrollRef.current) {
-                    syncScrollTop(e.currentTarget, e.currentTarget.scrollTop);
-                  }
-                }}
               >
                 {!isValid && (
                   <div className={`rounded-2xl p-4 ${
@@ -1894,7 +1843,7 @@
             </div>
           );
         });
-      }, [columns, columnWidthPx, darkMode, bumpLayout, openThread, syncScrollTop]);
+      }, [columns, columnWidthPx, darkMode, bumpLayout, openThread]);
 
       if (!auth.isLoggedIn) {
         return <LoginScreen onLogin={auth.persistSession} />;
