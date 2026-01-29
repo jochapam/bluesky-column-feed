@@ -1486,24 +1486,42 @@
       }, []);
 
       const syncScrollTop = useCallback((fromEl, top) => {
+        // Skip if we're already syncing to prevent loops
         if (isSyncingScrollRef.current) return;
 
-        lastScrollTopRef.current = top;
-        if (rafIdRef.current != null) return;
+        // Cancel any pending sync
+        if (rafIdRef.current != null) {
+          cancelAnimationFrame(rafIdRef.current);
+        }
 
+        // Store the target scroll position
+        lastScrollTopRef.current = top;
+
+        // Throttle updates to animation frame
         rafIdRef.current = requestAnimationFrame(() => {
           rafIdRef.current = null;
+          
+          // Set sync flag to prevent feedback loops
           isSyncingScrollRef.current = true;
 
           const targetTop = lastScrollTopRef.current;
+          
+          // Sync all other columns
           for (const el of columnScrollRefs.current.values()) {
             if (!el || el === fromEl) continue;
-            if (Math.abs(el.scrollTop - targetTop) > 1) {
+            
+            // Only update if difference is significant (reduces jitter)
+            const diff = Math.abs(el.scrollTop - targetTop);
+            if (diff > 2) {
               el.scrollTop = targetTop;
             }
           }
 
-          isSyncingScrollRef.current = false;
+          // Use setTimeout to clear the sync flag after the browser has rendered
+          // This prevents the flash effect on touch devices
+          setTimeout(() => {
+            isSyncingScrollRef.current = false;
+          }, 0);
         });
       }, []);
 
@@ -1849,7 +1867,11 @@
                   if (el) columnScrollRefs.current.set(columnIndex, el);
                   else columnScrollRefs.current.delete(columnIndex);
                 }}
-                onScroll={(e) => syncScrollTop(e.currentTarget, e.currentTarget.scrollTop)}
+                onScroll={(e) => {
+                  if (!isSyncingScrollRef.current) {
+                    syncScrollTop(e.currentTarget, e.currentTarget.scrollTop);
+                  }
+                }}
               >
                 {!isValid && (
                   <div className={`rounded-2xl p-4 ${
