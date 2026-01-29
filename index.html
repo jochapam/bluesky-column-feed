@@ -9,10 +9,116 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,300&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
   <style>
-    body { overscroll-behavior-y: contain; }
-    .column-scroll { -webkit-overflow-scrolling: touch; }
+    :root {
+      --color-primary: #0a7ea4;
+      --color-primary-dark: #085a7a;
+      --color-accent: #ff6b35;
+      --color-surface-light: #fafbfc;
+      --color-surface-dark: #0d1117;
+      --color-border-light: #e5e7eb;
+      --color-border-dark: #1f2937;
+      --font-display: 'Fraunces', serif;
+      --font-body: 'Work Sans', sans-serif;
+      --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.08);
+      --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
+      --shadow-strong: 0 8px 32px rgba(0, 0, 0, 0.16);
+      --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-body);
+      overscroll-behavior-y: contain;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .font-display {
+      font-family: var(--font-display);
+    }
+
+    .column-scroll {
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    }
+
+    .column-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .column-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .column-scroll::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+
+    .dark .column-scroll::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(0); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .animate-fadeIn {
+      animation: fadeIn 0.3s var(--transition-smooth);
+    }
+
+    .animate-slideIn {
+      animation: slideIn 0.3s var(--transition-smooth);
+    }
+
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+
+    .glass-effect {
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
+    }
+
+    /* Focus visible styles for accessibility */
+    *:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* Reduce motion for users who prefer it */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 
@@ -20,440 +126,374 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useEffect, useMemo, useRef, useState } = React;
+    const { useEffect, useMemo, useRef, useState, useCallback, useReducer, createContext, useContext } = React;
 
-    // --- Icons ---
-    const ChevronLeft = () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="15 18 9 12 15 6"></polyline>
-      </svg>
-    );
-    const ChevronRight = () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="9 18 15 12 9 6"></polyline>
-      </svg>
-    );
-    const RefreshCw = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="23 4 23 10 17 10"></polyline>
-        <polyline points="1 20 1 14 7 14"></polyline>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-      </svg>
-    );
-    const AlertCircle = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="12"></line>
-        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-      </svg>
-    );
-    const LogOut = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-        <polyline points="16 17 21 12 16 7"></polyline>
-        <line x1="21" y1="12" x2="9" y2="12"></line>
-      </svg>
-    );
-    const Menu = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-      </svg>
-    );
-    const Search = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="8"></circle>
-        <path d="m21 21-4.35-4.35"></path>
-      </svg>
-    );
-    const TrendingUp = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-        <polyline points="17 6 23 6 23 12"></polyline>
-      </svg>
-    );
-    const Moon = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-      </svg>
-    );
-    const Sun = ({ className }) => (
-      <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      </svg>
-    );
-    const MessageCircle = ({ className }) => (
-      <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-      </svg>
-    );
-    const Repeat = ({ className }) => (
-      <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="17 1 21 5 17 9"></polyline>
-        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-        <polyline points="7 23 3 19 7 15"></polyline>
-        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
-      </svg>
-    );
-    const Heart = ({ className }) => (
-      <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-      </svg>
-    );
-
-    // ---------- Helpers ----------
-    const safe = (v, fallback = '') => (v == null ? fallback : v);
-
-    const runSelfTests = () => {
-      // Very small sanity tests (doesn't affect UI)
-      const assert = (cond, msg) => {
-        if (!cond) console.error('[SelfTest FAILED]', msg);
-      };
-
-      const flattenThread = (node, out, depth = 0) => {
-        if (!node) return;
-        if (node.parent) flattenThread(node.parent, out, Math.min(depth + 1, 6));
-        if (node.post) out.push({ post: node.post, depth });
-        if (Array.isArray(node.replies)) {
-          for (const r of node.replies) {
-            if (!r?.post) continue;
-            out.push({ post: r.post, depth: Math.min(depth + 1, 6) });
-          }
-        }
-      };
-
-      const fake = { post: { uri: 'a' }, replies: [{ post: { uri: 'b' } }, { post: { uri: 'c' } }] };
-      const out = [];
-      flattenThread(fake, out, 0);
-      assert(out.length === 3, 'flattenThread should produce 3 items');
-      assert(out[0].post.uri === 'a', 'flattenThread root first');
+    // ==================== CONSTANTS ====================
+    const CONSTANTS = {
+      COLUMNS_TO_SHOW: 3,
+      GAP_PX: 16,
+      PAD_PX: 16,
+      CARD_GAP_PX: 16,
+      MIN_COLUMN_WIDTH: 240,
+      SIDEBAR_WIDTH_EXPANDED: 256,
+      SIDEBAR_WIDTH_COLLAPSED: 64,
+      SWIPE_DISTANCE_THRESHOLD_PX: 120,
+      SWIPE_DISTANCE_THRESHOLD_RATIO: 0.18,
+      SWIPE_VELOCITY_THRESHOLD: 0.55,
+      SWIPE_RESISTANCE_FACTOR: 0.4,
+      SWIPE_MAX_PULL_RATIO: 0.55,
+      SWIPE_PROJECTION_MS: 220,
+      SWIPE_ANIMATION_DURATION: 260,
+      TOKEN_REFRESH_INTERVAL_MS: 2 * 60 * 1000,
+      MIN_CARD_HEIGHT: 320,
+      MAX_THREAD_DEPTH: 6,
     };
 
-    // ---------- App ----------
-    function BlueskyColumnFeed() {
-      const [posts, setPosts] = useState([]);
-      const [columns, setColumns] = useState([]); // packed columns
+    const API_ENDPOINTS = {
+      BASE_URL: 'https://bsky.social',
+      CREATE_SESSION: '/xrpc/com.atproto.server.createSession',
+      REFRESH_SESSION: '/xrpc/com.atproto.server.refreshSession',
+      GET_TIMELINE: '/xrpc/app.bsky.feed.getTimeline',
+      GET_POST_THREAD: '/xrpc/app.bsky.feed.getPostThread',
+      GET_POSTS: '/xrpc/app.bsky.feed.getPosts',
+    };
 
-      const [loading, setLoading] = useState(false);
-      const [currentColumn, setCurrentColumn] = useState(0);
+    // ==================== ICONS ====================
+    const Icons = {
+      ChevronLeft: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      ),
+      ChevronRight: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      ),
+      RefreshCw: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+      ),
+      AlertCircle: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      ),
+      LogOut: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      ),
+      Menu: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      ),
+      Search: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+      ),
+      TrendingUp: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+          <polyline points="17 6 23 6 23 12"></polyline>
+        </svg>
+      ),
+      Moon: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      ),
+      Sun: ({ className = "" }) => (
+        <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      ),
+      MessageCircle: ({ className = "" }) => (
+        <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+        </svg>
+      ),
+      Repeat: ({ className = "" }) => (
+        <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="17 1 21 5 17 9"></polyline>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+          <polyline points="7 23 3 19 7 15"></polyline>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+        </svg>
+      ),
+      Heart: ({ className = "" }) => (
+        <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+        </svg>
+      ),
+    };
 
-      const [handle, setHandle] = useState('');
-      const [password, setPassword] = useState('');
-      const [authCode, setAuthCode] = useState('');
-      const [needsAuthCode, setNeedsAuthCode] = useState(false);
-
-      const [isLoggedIn, setIsLoggedIn] = useState(false);
-      const [session, setSession] = useState(null);
-      const [error, setError] = useState('');
-
-      const COLUMNS_TO_SHOW = 3;
-
-      const [sidebarExpanded, setSidebarExpanded] = useState(false);
-      const [darkMode, setDarkMode] = useState(false);
-
-      const columnScrollRefs = useRef(new Map()); // key -> element
-const isSyncingScrollRef = useRef(false);
-const rafIdRef = useRef(null);
-const lastScrollTopRef = useRef(0);
-      function syncScrollTop(fromEl, top) {
-  if (isSyncingScrollRef.current) return;
-
-  // throttle to animation frame
-  lastScrollTopRef.current = top;
-  if (rafIdRef.current != null) return;
-
-  rafIdRef.current = requestAnimationFrame(() => {
-    rafIdRef.current = null;
-    isSyncingScrollRef.current = true;
-
-    const targetTop = lastScrollTopRef.current;
-    for (const el of columnScrollRefs.current.values()) {
-      if (!el || el === fromEl) continue;
-      if (Math.abs(el.scrollTop - targetTop) > 1) el.scrollTop = targetTop;
-    }
-
-    isSyncingScrollRef.current = false;
-  });
-}
+    // ==================== UTILITIES ====================
+    const Utils = {
+      safe: (value, fallback = '') => (value == null ? fallback : value),
       
-      // thread modal
-      const [threadOpen, setThreadOpen] = useState(false);
-      const [threadLoading, setThreadLoading] = useState(false);
-      const [threadError, setThreadError] = useState('');
-      const [threadFocusUri, setThreadFocusUri] = useState(null);
-      const [threadItems, setThreadItems] = useState([]); // flattened
-
-      // cache for parent-post previews (for replies)
-      const [postPreviewCache, setPostPreviewCache] = useState(() => ({})); // uri -> postView
-      const postPreviewInFlight = useRef(new Set());
-
-      // re-layout trigger
-      const [layoutTick, setLayoutTick] = useState(0);
-      const measureRefs = useRef([]);
-      const rafReflowRef = useRef(null);
-
-      // swipe
-      const [dragX, setDragX] = useState(0);
-      const [isDragging, setIsDragging] = useState(false);
-      const [isAnimating, setIsAnimating] = useState(false);
-      const pointerSwipeRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0 });
-      const velocityRef = useRef({ v: 0, lastX: 0, lastT: 0 });
-
-      const bumpLayout = () => {
-        if (rafReflowRef.current) cancelAnimationFrame(rafReflowRef.current);
-        rafReflowRef.current = requestAnimationFrame(() => setLayoutTick((t) => t + 1));
-      };
-
-      // ---- Session helpers ----
-      const getPdsBaseUrl = (sess) => {
-        try {
-          const svc = sess?.didDoc?.service?.find((s) => typeof s?.id === 'string' && s.id.includes('#atproto_pds'));
-          return svc?.serviceEndpoint || 'https://bsky.social';
-        } catch {
-          return 'https://bsky.social';
-        }
-      };
-
-      const persistSession = (sess) => {
-        setSession(sess);
-        localStorage.setItem('bluesky_session', JSON.stringify(sess));
-      };
-
-      const refreshAccessToken = async (sess) => {
-        if (!sess?.refreshJwt) return null;
-        const base = getPdsBaseUrl(sess);
-        const resp = await fetch(`${base}/xrpc/com.atproto.server.refreshSession`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${sess.refreshJwt}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        if (!resp.ok) return null;
-        const newSession = await resp.json();
-        persistSession(newSession);
-        return newSession.accessJwt;
-      };
-
-      const hardReset = () => {
-        try { localStorage.removeItem('bluesky_session'); } catch {}
-        setIsLoggedIn(false);
-        setSession(null);
-        setPosts([]);
-        setColumns([]);
-        setHandle('');
-        setPassword('');
-        setAuthCode('');
-        setNeedsAuthCode(false);
-        setError('');
-        setCurrentColumn(0);
-        setDragX(0);
-        window.location.reload();
-      };
-
-      const formatTimeAgo = (timestamp) => {
+      clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
+      
+      formatTimeAgo: (timestamp) => {
         const now = new Date();
         const posted = new Date(timestamp);
         const diffMs = now - posted;
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMins / 60);
         const diffDays = Math.floor(diffHours / 24);
+        
         if (diffMins < 1) return 'now';
         if (diffMins < 60) return `${diffMins}m`;
         if (diffHours < 24) return `${diffHours}h`;
         return `${diffDays}d`;
-      };
+      },
 
-      useEffect(() => {
-        runSelfTests();
-      }, []);
+      debounce: (func, wait) => {
+        let timeout;
+        return (...args) => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func(...args), wait);
+        };
+      },
 
-      // startup
-      useEffect(() => {
-        const savedSession = localStorage.getItem('bluesky_session');
-        const savedDarkMode = localStorage.getItem('darkMode');
-        if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
+      getPdsBaseUrl: (session) => {
+        try {
+          const service = session?.didDoc?.service?.find(
+            (s) => typeof s?.id === 'string' && s.id.includes('#atproto_pds')
+          );
+          return service?.serviceEndpoint || API_ENDPOINTS.BASE_URL;
+        } catch (err) {
+          console.error('Error getting PDS base URL:', err);
+          return API_ENDPOINTS.BASE_URL;
+        }
+      },
+    };
 
-        if (savedSession) {
-          try {
-            const s = JSON.parse(savedSession);
-            setSession(s);
-            setIsLoggedIn(true);
-            fetchTimeline(s);
-          } catch {
-            localStorage.removeItem('bluesky_session');
-          }
+    // ==================== ERROR BOUNDARY ====================
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+
+      componentDidCatch(error, errorInfo) {
+        console.error('ErrorBoundary caught:', error, errorInfo);
+      }
+
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md">
+                <Icons.AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+                <h1 className="font-display text-2xl font-bold text-red-900 mb-2 text-center">
+                  Something went wrong
+                </h1>
+                <p className="text-gray-700 text-center mb-4">
+                  {this.state.error?.message || 'An unexpected error occurred'}
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return this.props.children;
+      }
+    }
+
+    // ==================== CONTEXT ====================
+    const AppContext = createContext();
+
+    const useAppContext = () => {
+      const context = useContext(AppContext);
+      if (!context) {
+        throw new Error('useAppContext must be used within AppProvider');
+      }
+      return context;
+    };
+
+    // ==================== CUSTOM HOOKS ====================
+    
+    // Auth Hook
+    const useAuth = () => {
+      const [session, setSession] = useState(null);
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+      const persistSession = useCallback((sess) => {
+        setSession(sess);
+        setIsLoggedIn(true);
+        try {
+          localStorage.setItem('bluesky_session', JSON.stringify(sess));
+        } catch (err) {
+          console.error('Failed to persist session:', err);
         }
       }, []);
 
-      // proactive refresh
-      useEffect(() => {
-        if (!session?.refreshJwt) return;
-        const id = setInterval(() => {
-          refreshAccessToken(session).catch(() => {});
-        }, 2 * 60 * 1000);
-        return () => clearInterval(id);
-      }, [session?.refreshJwt]);
-
-      // resize/orientation
-      useEffect(() => {
-        const onResize = () => bumpLayout();
-        window.addEventListener('resize', onResize);
-        window.addEventListener('orientationchange', onResize);
-        return () => {
-          window.removeEventListener('resize', onResize);
-          window.removeEventListener('orientationchange', onResize);
-        };
+      const clearSession = useCallback(() => {
+        setSession(null);
+        setIsLoggedIn(false);
+        try {
+          localStorage.removeItem('bluesky_session');
+        } catch (err) {
+          console.error('Failed to clear session:', err);
+        }
       }, []);
 
-      const toggleDarkMode = () => {
-        const next = !darkMode;
-        setDarkMode(next);
-        localStorage.setItem('darkMode', next);
-        bumpLayout();
-      };
-
-      const login = async () => {
-        setLoading(true);
-        setError('');
+      const refreshAccessToken = useCallback(async (sess) => {
+        if (!sess?.refreshJwt) {
+          console.warn('No refresh token available');
+          return null;
+        }
+        
         try {
-          const body = { identifier: handle, password };
-          if (authCode) body.authFactorToken = authCode;
-
-          const response = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
+          const base = Utils.getPdsBaseUrl(sess);
+          const response = await fetch(`${base}${API_ENDPOINTS.REFRESH_SESSION}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            headers: {
+              'Authorization': `Bearer ${sess.refreshJwt}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (errorData.error === 'AuthFactorTokenRequired') {
-              setNeedsAuthCode(true);
-              setError('Please enter the code sent to your email');
-              setLoading(false);
-              return;
-            }
-            throw new Error(errorData.message || 'Login failed. Check your credentials.');
+            console.error('Token refresh failed:', response.status);
+            return null;
           }
 
-          const data = await response.json();
-          persistSession(data);
-          setIsLoggedIn(true);
-          setNeedsAuthCode(false);
-          await fetchTimeline(data);
+          const newSession = await response.json();
+          persistSession(newSession);
+          return newSession.accessJwt;
         } catch (err) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
+          console.error('Error refreshing token:', err);
+          return null;
         }
-      };
+      }, [persistSession]);
 
-      const logout = () => {
-        setIsLoggedIn(false);
-        setSession(null);
-        setPosts([]);
-        setColumns([]);
-        setHandle('');
-        setPassword('');
-        setAuthCode('');
-        setNeedsAuthCode(false);
-        setError('');
-        setCurrentColumn(0);
-        setDragX(0);
-        localStorage.removeItem('bluesky_session');
-      };
+      const restoreSession = useCallback(() => {
+        try {
+          const savedSession = localStorage.getItem('bluesky_session');
+          if (savedSession) {
+            const parsed = JSON.parse(savedSession);
+            setSession(parsed);
+            setIsLoggedIn(true);
+            return parsed;
+          }
+        } catch (err) {
+          console.error('Failed to restore session:', err);
+          clearSession();
+        }
+        return null;
+      }, [clearSession]);
 
-      const xrpcJsonWithAuth = async (sess, pathWithQuery, method = 'GET', body = null) => {
-        const base = getPdsBaseUrl(sess);
-        const doFetch = async (jwt) =>
-          fetch(`${base}${pathWithQuery}`, {
+      return {
+        session,
+        isLoggedIn,
+        persistSession,
+        clearSession,
+        refreshAccessToken,
+        restoreSession,
+      };
+    };
+
+    // API Hook
+    const useBlueskyAPI = (session, refreshAccessToken) => {
+      const makeAuthenticatedRequest = useCallback(async (pathWithQuery, method = 'GET', body = null) => {
+        if (!session?.accessJwt) {
+          throw new Error('Not authenticated');
+        }
+
+        const base = Utils.getPdsBaseUrl(session);
+        
+        const doFetch = async (jwt) => {
+          const headers = {
+            'Authorization': `Bearer ${jwt}`,
+          };
+          
+          if (method !== 'GET') {
+            headers['Content-Type'] = 'application/json';
+          }
+
+          return fetch(`${base}${pathWithQuery}`, {
             method,
-            headers: {
-              Authorization: `Bearer ${jwt}`,
-              ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
-            },
+            headers,
             body: body ? JSON.stringify(body) : undefined,
           });
+        };
 
-        let resp = await doFetch(sess.accessJwt);
-        if (resp.status === 401) {
-          const newAccess = await refreshAccessToken(sess);
-          if (!newAccess) throw new Error('Session expired. Please sign in again.');
-          resp = await doFetch(newAccess);
+        let response = await doFetch(session.accessJwt);
+
+        // Handle token expiration
+        if (response.status === 401) {
+          const newAccessToken = await refreshAccessToken(session);
+          if (!newAccessToken) {
+            throw new Error('Session expired. Please sign in again.');
+          }
+          response = await doFetch(newAccessToken);
         }
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => null);
-          throw new Error(err?.message ? `${resp.status}: ${err.message}` : `Request failed: ${resp.status}`);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(
+            errorData?.message 
+              ? `${response.status}: ${errorData.message}` 
+              : `Request failed: ${response.status}`
+          );
         }
-        return resp.json();
-      };
 
-      const fetchTimeline = async (sess = session) => {
-        if (!sess?.accessJwt) return;
-        setLoading(true);
-        setError('');
-        try {
-          const data = await xrpcJsonWithAuth(sess, `/xrpc/app.bsky.feed.getTimeline?limit=50`);
-          setPosts(data.feed || []);
-          setCurrentColumn(0);
-          setDragX(0);
-          bumpLayout();
-        } catch (err) {
-          setError(`Error loading feed: ${err.message}`);
-        } finally {
-          setLoading(false);
-        }
-      };
+        return response.json();
+      }, [session, refreshAccessToken]);
 
-      const refresh = () => {
-        if (session) fetchTimeline(session);
-      };
+      return { makeAuthenticatedRequest };
+    };
 
-      const fetchPostView = async (uri) => {
-        if (!uri || !session?.accessJwt) return null;
-        if (postPreviewCache[uri]) return postPreviewCache[uri];
-        if (postPreviewInFlight.current.has(uri)) return null;
-        postPreviewInFlight.current.add(uri);
-        try {
-          const data = await xrpcJsonWithAuth(session, `/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`);
-          const pv = data?.posts?.[0] || null;
-          if (pv) setPostPreviewCache((m) => ({ ...m, [uri]: pv }));
-          return pv;
-        } catch {
-          return null;
-        } finally {
-          postPreviewInFlight.current.delete(uri);
-        }
-      };
+    // Layout Hook
+    const useLayout = (sidebarExpanded) => {
+      const [layoutTick, setLayoutTick] = useState(0);
 
-      // ---- responsive column width ----
-      const getSidebarWidthPx = () => (sidebarExpanded ? 256 : 64);
-      const GAP_PX = 16;
-      const PAD_PX = 16;
-      const CARD_GAP_PX = 16;
+      const bumpLayout = useCallback(() => {
+        requestAnimationFrame(() => setLayoutTick(t => t + 1));
+      }, []);
 
       const columnWidthPx = useMemo(() => {
         const vw = window.innerWidth || 1024;
-        const available = vw - getSidebarWidthPx() - PAD_PX * 2 - (COLUMNS_TO_SHOW - 1) * GAP_PX;
-        return Math.max(240, Math.floor(available / COLUMNS_TO_SHOW));
+        const sidebarWidth = sidebarExpanded 
+          ? CONSTANTS.SIDEBAR_WIDTH_EXPANDED 
+          : CONSTANTS.SIDEBAR_WIDTH_COLLAPSED;
+        const available = vw - sidebarWidth - CONSTANTS.PAD_PX * 2 - 
+                         (CONSTANTS.COLUMNS_TO_SHOW - 1) * CONSTANTS.GAP_PX;
+        return Math.max(CONSTANTS.MIN_COLUMN_WIDTH, Math.floor(available / CONSTANTS.COLUMNS_TO_SHOW));
       }, [sidebarExpanded, layoutTick]);
-
-      const columnStyle = useMemo(
-        () => ({
-          flex: `0 0 ${columnWidthPx}px`,
-          maxWidth: `${columnWidthPx}px`,
-          minWidth: 0,
-        }),
-        [columnWidthPx]
-      );
 
       const columnViewportHeightPx = useMemo(() => {
         const vh = window.innerHeight || 800;
@@ -461,532 +501,1127 @@ const lastScrollTopRef = useRef(0);
       }, [layoutTick]);
 
       const pageWidthPx = useMemo(() => {
-        return columnWidthPx * COLUMNS_TO_SHOW + GAP_PX * (COLUMNS_TO_SHOW - 1);
+        return columnWidthPx * CONSTANTS.COLUMNS_TO_SHOW + 
+               CONSTANTS.GAP_PX * (CONSTANTS.COLUMNS_TO_SHOW - 1);
       }, [columnWidthPx]);
 
-      // ---- swipe + peek ----
-      const totalColumns = columns.length;
-      const maxColumnIndex = Math.max(0, totalColumns - COLUMNS_TO_SHOW);
+      useEffect(() => {
+        const handleResize = Utils.debounce(bumpLayout, 100);
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+        
+        return () => {
+          window.removeEventListener('resize', handleResize);
+          window.removeEventListener('orientationchange', handleResize);
+        };
+      }, [bumpLayout]);
 
-      const pagePrev = () => setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
-      const pageNext = () => setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
+      return {
+        columnWidthPx,
+        columnViewportHeightPx,
+        pageWidthPx,
+        bumpLayout,
+      };
+    };
 
-      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    // ==================== AUTH SCREEN ====================
+    const authReducer = (state, action) => {
+      switch (action.type) {
+        case 'SET_HANDLE':
+          return { ...state, handle: action.payload };
+        case 'SET_PASSWORD':
+          return { ...state, password: action.payload };
+        case 'SET_AUTH_CODE':
+          return { ...state, authCode: action.payload };
+        case 'SET_NEEDS_AUTH_CODE':
+          return { ...state, needsAuthCode: action.payload };
+        case 'SET_ERROR':
+          return { ...state, error: action.payload };
+        case 'SET_LOADING':
+          return { ...state, loading: action.payload };
+        case 'RESET':
+          return {
+            handle: '',
+            password: '',
+            authCode: '',
+            needsAuthCode: false,
+            error: '',
+            loading: false,
+          };
+        default:
+          return state;
+      }
+    };
 
-      const animateDragTo = (targetDragX, onDone) => {
-        setIsAnimating(true);
-        setDragX(targetDragX);
-        window.setTimeout(() => {
-          setIsAnimating(false);
-          onDone?.();
-        }, 260);
+    const LoginScreen = ({ onLogin }) => {
+      const [state, dispatch] = useReducer(authReducer, {
+        handle: '',
+        password: '',
+        authCode: '',
+        needsAuthCode: false,
+        error: '',
+        loading: false,
+      });
+
+      const handleLogin = async () => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        dispatch({ type: 'SET_ERROR', payload: '' });
+
+        try {
+          const body = {
+            identifier: state.handle,
+            password: state.password,
+          };
+
+          if (state.authCode) {
+            body.authFactorToken = state.authCode;
+          }
+
+          const response = await fetch(`${API_ENDPOINTS.BASE_URL}${API_ENDPOINTS.CREATE_SESSION}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            
+            if (errorData.error === 'AuthFactorTokenRequired') {
+              dispatch({ type: 'SET_NEEDS_AUTH_CODE', payload: true });
+              dispatch({ type: 'SET_ERROR', payload: 'Please enter the verification code sent to your email' });
+              return;
+            }
+            
+            throw new Error(errorData.message || 'Login failed. Please check your credentials.');
+          }
+
+          const sessionData = await response.json();
+          
+          // Clear sensitive data
+          dispatch({ type: 'SET_PASSWORD', payload: '' });
+          dispatch({ type: 'SET_AUTH_CODE', payload: '' });
+          
+          onLogin(sessionData);
+        } catch (err) {
+          console.error('Login error:', err);
+          dispatch({ type: 'SET_ERROR', payload: err.message });
+        } finally {
+          dispatch({ type: 'SET_LOADING', payload: false });
+        }
       };
 
-      const goPrevWithAnimation = () => {
-        if (currentColumn === 0) {
-          animateDragTo(0, () => setDragX(0));
-          return;
+      const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !state.loading) {
+          const canSubmit = state.handle && state.password && (!state.needsAuthCode || state.authCode);
+          if (canSubmit) {
+            handleLogin();
+          }
         }
-        animateDragTo(pageWidthPx, () => {
-          setCurrentColumn((c) => Math.max(0, c - COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
       };
 
-      const goNextWithAnimation = () => {
-        if (currentColumn >= maxColumnIndex) {
-          animateDragTo(0, () => setDragX(0));
-          return;
+      const handleReset = () => {
+        try {
+          localStorage.removeItem('bluesky_session');
+        } catch (err) {
+          console.error('Failed to clear session:', err);
         }
-        animateDragTo(-pageWidthPx, () => {
-          setCurrentColumn((c) => Math.min(maxColumnIndex, c + COLUMNS_TO_SHOW));
-          setDragX(0);
-        });
+        window.location.reload();
       };
 
-      const onPointerDown = (e) => {
-        if (e.pointerType === 'mouse') return;
-        if (isAnimating) return;
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 flex items-center justify-center">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md animate-fadeIn">
+            <div className="text-center mb-8">
+              <h1 className="font-display text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+                Bluesky Columns
+              </h1>
+              <p className="text-gray-600">Experience your timeline in a new way</p>
+            </div>
 
-        pointerSwipeRef.current.active = true;
-        pointerSwipeRef.current.pointerId = e.pointerId;
-        pointerSwipeRef.current.startX = e.clientX;
-        pointerSwipeRef.current.startY = e.clientY;
-        pointerSwipeRef.current.lastX = e.clientX;
-        pointerSwipeRef.current.lastY = e.clientY;
+            {state.error && (
+              <div 
+                className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 flex gap-2 animate-fadeIn"
+                role="alert"
+                aria-live="assertive"
+              >
+                <Icons.AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span className="text-sm">{state.error}</span>
+              </div>
+            )}
 
-        const now = performance.now();
-        velocityRef.current = { v: 0, lastX: e.clientX, lastT: now };
-
-        setIsDragging(true);
-        setDragX(0);
-
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-      };
-
-      const onPointerMove = (e) => {
-        if (!pointerSwipeRef.current.active) return;
-        if (pointerSwipeRef.current.pointerId !== e.pointerId) return;
-
-        pointerSwipeRef.current.lastX = e.clientX;
-        pointerSwipeRef.current.lastY = e.clientY;
-
-        const dx = e.clientX - pointerSwipeRef.current.startX;
-        const dy = e.clientY - pointerSwipeRef.current.startY;
-
-        const adx = Math.abs(dx);
-        const ady = Math.abs(dy);
-        if (ady > adx * 1.1) return;
-
-        const now = performance.now();
-        const dt = Math.max(1, now - velocityRef.current.lastT);
-        const instV = (e.clientX - velocityRef.current.lastX) / dt;
-        velocityRef.current.v = velocityRef.current.v * 0.8 + instV * 0.2;
-        velocityRef.current.lastX = e.clientX;
-        velocityRef.current.lastT = now;
-
-        const maxPull = pageWidthPx * 0.55;
-        let finalDx = clamp(dx, -maxPull, maxPull);
-
-        const atStart = currentColumn === 0;
-        const atEnd = currentColumn >= maxColumnIndex;
-        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
-          finalDx *= 0.4;
-        }
-
-        setDragX(finalDx);
-      };
-
-      const onPointerUpOrCancel = () => {
-        if (!pointerSwipeRef.current.active) return;
-        pointerSwipeRef.current.active = false;
-        pointerSwipeRef.current.pointerId = null;
-        setIsDragging(false);
-
-        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
-        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
-        const adx = Math.abs(dx);
-        const ady = Math.abs(dy);
-
-        if (ady > adx * 0.9) {
-          animateDragTo(0, () => setDragX(0));
-          return;
-        }
-
-        const v = velocityRef.current.v;
-        const projectionMs = 220;
-        const projectedDx = dx + v * projectionMs;
-
-        const distanceThreshold = Math.min(120, pageWidthPx * 0.18);
-        const velocityThreshold = 0.55;
-
-        const shouldGoNext = projectedDx < -distanceThreshold || v < -velocityThreshold;
-        const shouldGoPrev = projectedDx > distanceThreshold || v > velocityThreshold;
-
-        if (shouldGoNext) return goNextWithAnimation();
-        if (shouldGoPrev) return goPrevWithAnimation();
-
-        animateDragTo(0, () => setDragX(0));
-      };
-
-      // ---- quoted posts renderer ----
-      const renderQuotedRecord = (embed) => {
-        if (!embed || !embed.$type) return null;
-
-        let recordView = null;
-        let mediaView = null;
-
-        if (embed.$type === 'app.bsky.embed.record#view') {
-          recordView = embed.record;
-        } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
-          recordView = embed.record?.record;
-          mediaView = embed.media;
-        } else {
-          return null;
-        }
-
-        if (!recordView || !recordView.$type) return null;
-
-        const rt = recordView.$type;
-        const baseCardClass = `mt-3 rounded-lg border p-3 ${darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`;
-
-        if (rt === 'app.bsky.embed.record#viewNotFound') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post not found.</div></div>;
-        }
-        if (rt === 'app.bsky.embed.record#viewBlocked') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is blocked.</div></div>;
-        }
-        if (rt === 'app.bsky.embed.record#viewDetached') {
-          return <div className={baseCardClass}><div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Quoted post is unavailable.</div></div>;
-        }
-
-        if (rt === 'app.bsky.embed.record#viewRecord') {
-          const author = recordView.author;
-          const value = recordView.value || {};
-          const quotedText = safe(value.text);
-
-          return (
-            <div className={baseCardClass}>
-              <div className="flex items-start gap-2 mb-2">
-                {author?.avatar && (
-                  <img src={author.avatar} alt={author.displayName || author.handle} className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                    {author?.displayName || author?.handle || 'Unknown'}
-                  </div>
-                  {author?.handle && (
-                    <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      @{author.handle}
-                    </div>
-                  )}
-                </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="handle" className="block text-sm font-medium text-gray-700 mb-1">
+                  Handle or Email
+                </label>
+                <input
+                  id="handle"
+                  type="text"
+                  value={state.handle}
+                  onChange={(e) => dispatch({ type: 'SET_HANDLE', payload: e.target.value })}
+                  placeholder="username.bsky.social"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  disabled={state.needsAuthCode || state.loading}
+                  onKeyPress={handleKeyPress}
+                  autoComplete="username"
+                />
               </div>
 
-              {quotedText ? (
-                <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                  {quotedText}
-                </p>
-              ) : (
-                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Quoted content</p>
-              )}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  App Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={state.password}
+                  onChange={(e) => dispatch({ type: 'SET_PASSWORD', payload: e.target.value })}
+                  placeholder="••••-••••-••••-••••"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  disabled={state.needsAuthCode || state.loading}
+                  onKeyPress={handleKeyPress}
+                  autoComplete="current-password"
+                />
+              </div>
 
-              {mediaView?.$type === 'app.bsky.embed.images#view' && mediaView.images?.length > 0 && (
-                <div className="mt-3">
-                  <img src={mediaView.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
+              {state.needsAuthCode && (
+                <div className="animate-fadeIn">
+                  <label htmlFor="authCode" className="block text-sm font-medium text-gray-700 mb-1">
+                    Verification Code
+                  </label>
+                  <input
+                    id="authCode"
+                    type="text"
+                    value={state.authCode}
+                    onChange={(e) => dispatch({ type: 'SET_AUTH_CODE', payload: e.target.value })}
+                    placeholder="Enter code from email"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    autoFocus
+                    onKeyPress={handleKeyPress}
+                    autoComplete="one-time-code"
+                  />
                 </div>
               )}
 
-              {mediaView?.$type === 'app.bsky.embed.external#view' && mediaView.external && (
-                <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                  {mediaView.external.thumb && (
-                    <img src={mediaView.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
-                  )}
-                  <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {mediaView.external.title}
-                  </div>
-                  <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {mediaView.external.uri}
-                  </div>
-                </div>
+              <button
+                onClick={handleLogin}
+                disabled={state.loading || !state.handle || !state.password || (state.needsAuthCode && !state.authCode)}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                aria-busy={state.loading}
+              >
+                {state.loading ? 'Logging in...' : state.needsAuthCode ? 'Verify Code' : 'Login'}
+              </button>
+
+              {state.needsAuthCode && (
+                <button
+                  onClick={() => {
+                    dispatch({ type: 'SET_NEEDS_AUTH_CODE', payload: false });
+                    dispatch({ type: 'SET_AUTH_CODE', payload: '' });
+                    dispatch({ type: 'SET_ERROR', payload: '' });
+                  }}
+                  className="w-full text-blue-600 py-2 rounded-xl font-semibold hover:bg-blue-50 transition-colors"
+                >
+                  Back
+                </button>
               )}
+
+              <button
+                onClick={handleReset}
+                className="w-full mt-2 text-orange-600 py-2 rounded-xl font-semibold hover:bg-orange-50 transition-colors"
+              >
+                Reset Session
+              </button>
             </div>
-          );
-        }
 
+            <div className="mt-6 p-4 bg-blue-50 rounded-xl">
+              <p className="text-xs text-gray-700">
+                <strong>Security Tip:</strong> Use an App Password (not your main password). 
+                Create one in Settings → App Passwords on Bluesky.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ==================== POST CARD ====================
+    const QuotedRecord = ({ embed, darkMode, bumpLayout }) => {
+      if (!embed || !embed.$type) return null;
+
+      let recordView = null;
+      let mediaView = null;
+
+      if (embed.$type === 'app.bsky.embed.record#view') {
+        recordView = embed.record;
+      } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
+        recordView = embed.record?.record;
+        mediaView = embed.media;
+      } else {
         return null;
-      };
+      }
 
-      // ---- Thread logic ----
-      const flattenThread = (node, out, depth = 0) => {
-        if (!node) return;
-        if (node.parent) flattenThread(node.parent, out, Math.min(depth + 1, 6));
-        if (node.post) out.push({ post: node.post, depth });
-        if (Array.isArray(node.replies)) {
-          for (const r of node.replies) {
-            if (!r?.post) continue;
-            out.push({ post: r.post, depth: Math.min(depth + 1, 6) });
-            // show one more level deep if present
-            if (Array.isArray(r.replies)) {
-              for (const rr of r.replies) {
-                if (!rr?.post) continue;
-                out.push({ post: rr.post, depth: Math.min(depth + 2, 6) });
-              }
-            }
-          }
-        }
-      };
+      if (!recordView || !recordView.$type) return null;
 
-      const openThread = async (uri) => {
-        if (!uri || !session?.accessJwt) return;
-        setThreadOpen(true);
-        setThreadFocusUri(uri);
-        setThreadLoading(true);
-        setThreadError('');
-        setThreadItems([]);
-        try {
-          const data = await xrpcJsonWithAuth(session, `/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=6&parentHeight=10`);
-          const out = [];
-          flattenThread(data?.thread, out, 0);
+      const baseCardClass = `mt-3 rounded-xl border p-3 ${
+        darkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'
+      }`;
 
-          // de-dupe by uri
-          const seen = new Set();
-          const unique = [];
-          for (const it of out) {
-            const u = it?.post?.uri;
-            if (!u) continue;
-            if (seen.has(u)) continue;
-            seen.add(u);
-            unique.push(it);
-          }
-          setThreadItems(unique);
-        } catch (e) {
-          setThreadError(e?.message || 'Failed to load thread');
-        } finally {
-          setThreadLoading(false);
-        }
-      };
+      const notFoundTypes = [
+        'app.bsky.embed.record#viewNotFound',
+        'app.bsky.embed.record#viewBlocked',
+        'app.bsky.embed.record#viewDetached',
+      ];
 
-      const closeThread = () => {
-        setThreadOpen(false);
-        setThreadLoading(false);
-        setThreadError('');
-        setThreadItems([]);
-        setThreadFocusUri(null);
-      };
-
-      // ---- Post card ----
-      const PostCard = ({ item, measuring = false, setRef = null, compact = false }) => {
-        const [replyHover, setReplyHover] = useState(false);
-        const [replyLoading, setReplyLoading] = useState(false);
-        const [replyPreview, setReplyPreview] = useState(null);
-        const post = item?.post;
-        if (!post) return null;
-
-        const isReply = !!post?.record?.reply;
-
-        const isRepost =
-          item.reason?.$type === 'app.bsky.feed.defs#reasonRepost' ||
-          item.reason?.$type === 'app.bsky.feed.defs#skeletonReasonRepost';
-
-        const reposter = isRepost ? item.reason?.by : null;
-        const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
-
-        const cardPad = compact ? 'p-3' : 'p-4';
-
-        const parentUri = post?.record?.reply?.parent?.uri || null;
-        const rootUri = post?.record?.reply?.root?.uri || null;
-
-        const ensureReplyPreview = async () => {
-          if (!parentUri) return;
-          if (replyPreview) return;
-          if (postPreviewCache[parentUri]) {
-            setReplyPreview(postPreviewCache[parentUri]);
-            return;
-          }
-          setReplyLoading(true);
-          const pv = await fetchPostView(parentUri);
-          setReplyPreview(pv);
-          setReplyLoading(false);
+      if (notFoundTypes.includes(recordView.$type)) {
+        const messages = {
+          'app.bsky.embed.record#viewNotFound': 'Quoted post not found',
+          'app.bsky.embed.record#viewBlocked': 'Quoted post is blocked',
+          'app.bsky.embed.record#viewDetached': 'Quoted post is unavailable',
         };
+        
+        return (
+          <div className={baseCardClass}>
+            <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              {messages[recordView.$type]}
+            </div>
+          </div>
+        );
+      }
+
+      if (recordView.$type === 'app.bsky.embed.record#viewRecord') {
+        const author = recordView.author;
+        const value = recordView.value || {};
+        const quotedText = Utils.safe(value.text);
 
         return (
-          <div
-            ref={setRef}
-            className={`rounded-xl shadow-lg ${cardPad} ${measuring ? '' : 'hover:shadow-xl transition-shadow'} ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
-          >
-            {isReply && !compact && (
-              <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                <MessageCircle className="w-4 h-4" />
-                <button
-                  className="underline-offset-2 hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const parentUri = post?.record?.reply?.parent?.uri || post?.record?.reply?.root?.uri;
-                    if (parentUri) openThread(parentUri);
-                  }}
-                  title="View original post"
-                >
-                  Replying to another post
-                </button>
-              </div>
-            )}
-
-            {isRepost && reposter && !compact && (
-              <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                <Repeat className="w-4 h-4" />
-                <span>
-                  Reposted by <span className="font-semibold">@{reposter.handle}</span>
-                  {repostedAt ? ` · ${formatTimeAgo(repostedAt)}` : ''}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-start gap-3 mb-3">
-              {post.author?.avatar && (
-                <img
-                  src={post.author.avatar}
-                  alt={post.author.displayName || post.author.handle}
-                  className={compact ? 'w-9 h-9 rounded-full' : 'w-10 h-10 rounded-full'}
+          <div className={baseCardClass}>
+            <div className="flex items-start gap-2 mb-2">
+              {author?.avatar && (
+                <img 
+                  src={author.avatar} 
+                  alt="" 
+                  className="w-7 h-7 rounded-full" 
                   onLoad={bumpLayout}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    bumpLayout();
+                  }}
                 />
               )}
-              <div className="flex-1 min-w-0">
-                <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {post.author?.displayName || post.author?.handle}
+              <div className="min-w-0 flex-1">
+                <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {author?.displayName || author?.handle || 'Unknown'}
                 </div>
-                <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  @{post.author?.handle}
-                </div>
-              </div>
-              <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                {formatTimeAgo(post.indexedAt)}
-              </span>
-            </div>
-
-            {/* Reply context */}
-            {parentUri && !compact && (
-              <div
-                className={`-mt-1 mb-2 text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
-                onMouseEnter={() => {
-                  setReplyHover(true);
-                  ensureReplyPreview();
-                }}
-                onMouseLeave={() => setReplyHover(false)}
-              >
-                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Replying to </span>
-                <button
-                  className={`font-semibold underline decoration-dotted ${darkMode ? 'text-indigo-300 hover:text-indigo-200' : 'text-indigo-700 hover:text-indigo-800'}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openThread(parentUri);
-                  }}
-                  title="Open the post this is replying to"
-                >
-                  view parent
-                </button>
-
-                {(replyHover || replyLoading) && (
-                  <div className={`mt-2 rounded-xl border p-3 shadow-lg ${darkMode ? 'border-gray-700 bg-gray-900/60' : 'border-gray-200 bg-white'}`}>
-                    {replyLoading && !replyPreview && (
-                      <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading parent…</span>
-                      </div>
-                    )}
-
-                    {!replyLoading && !replyPreview && (
-                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                        Couldn’t load the parent post.
-                      </div>
-                    )}
-
-                    {replyPreview && (
-                      <div>
-                        <div className="flex items-start gap-2">
-                          {replyPreview.author?.avatar && (
-                            <img src={replyPreview.author.avatar} alt="" className="w-7 h-7 rounded-full" onLoad={bumpLayout} />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className={`text-xs font-semibold truncate ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                              {replyPreview.author?.displayName || replyPreview.author?.handle}
-                            </div>
-                            <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              @{replyPreview.author?.handle}
-                            </div>
-                          </div>
-                          <span className={`text-[11px] ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {formatTimeAgo(replyPreview.indexedAt)}
-                          </span>
-                        </div>
-
-                        {replyPreview.record?.text && (
-                          <div className={`mt-2 text-sm whitespace-pre-wrap break-words ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {replyPreview.record.text}
-                          </div>
-                        )}
-
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            className={`text-xs px-2 py-1 rounded-lg ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openThread(parentUri);
-                            }}
-                          >
-                            Open parent thread
-                          </button>
-                          {rootUri && rootUri !== parentUri && (
-                            <button
-                              className={`text-xs px-2 py-1 rounded-lg ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                openThread(rootUri);
-                              }}
-                            >
-                              Open root
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                {author?.handle && (
+                  <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    @{author.handle}
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
-            {post.record?.text && (
-              <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                {post.record.text}
+            {quotedText ? (
+              <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+                darkMode ? 'text-gray-200' : 'text-gray-800'
+              }`}>
+                {quotedText}
+              </p>
+            ) : (
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Quoted content
               </p>
             )}
 
-            {post.embed?.images && post.embed.images.length > 0 && (
+            {mediaView?.$type === 'app.bsky.embed.images#view' && mediaView.images?.length > 0 && (
               <div className="mt-3">
-                <img src={post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
+                <img 
+                  src={mediaView.images[0].thumb} 
+                  alt="" 
+                  className="rounded-lg w-full" 
+                  onLoad={bumpLayout}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    bumpLayout();
+                  }}
+                />
               </div>
             )}
 
-            {post.embed?.external && (
+            {mediaView?.$type === 'app.bsky.embed.external#view' && mediaView.external && (
               <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                {post.embed.external.thumb && (
-                  <img src={post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
+                {mediaView.external.thumb && (
+                  <img 
+                    src={mediaView.external.thumb} 
+                    alt="" 
+                    className="rounded w-full mb-2" 
+                    onLoad={bumpLayout}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      bumpLayout();
+                    }}
+                  />
                 )}
                 <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {post.embed.external.title}
+                  {mediaView.external.title}
                 </div>
                 <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {post.embed.external.uri}
+                  {mediaView.external.uri}
                 </div>
-              </div>
-            )}
-
-            {renderQuotedRecord(post.embed)}
-
-            {!compact && (
-              <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
-                <button
-                  className={`flex items-center gap-1.5 transition-colors ${
-                    (post.replyCount || 0) > 0
-                      ? (darkMode ? 'text-indigo-300 hover:text-indigo-200' : 'text-indigo-600 hover:text-indigo-700')
-                      : (darkMode ? 'text-gray-400 hover:text-indigo-300' : 'text-gray-500 hover:text-indigo-600')
-                  }`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (post?.uri) openThread(post.uri);
-                  }}
-                  title={(post.replyCount || 0) > 0 ? 'Open thread (has replies)' : 'Open thread'}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  {(post.replyCount || 0) > 0 ? (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${darkMode ? 'bg-indigo-500/20 text-indigo-200' : 'bg-indigo-50 text-indigo-700'}`}>
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${darkMode ? 'bg-indigo-300' : 'bg-indigo-600'}`} />
-                      {post.replyCount}
-                    </span>
-                  ) : (
-                    <span className="text-xs">0</span>
-                  )}
-                </button>
-                <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors" title="Reposts">
-                  <Repeat className="w-4 h-4" />
-                  <span>{post.repostCount || 0}</span>
-                </button>
-                <button className="flex items-center gap-1.5 hover:text-red-500 transition-colors" title="Likes">
-                  <Heart className="w-4 h-4" />
-                  <span>{post.likeCount || 0}</span>
-                </button>
               </div>
             )}
           </div>
         );
-      };
+      }
 
-      // ---- pack posts into columns (no cut-off posts) ----
+      return null;
+    };
+
+    const PostCard = ({ item, darkMode, bumpLayout, onOpenThread, compact = false }) => {
+      const post = item?.post;
+      if (!post) return null;
+
+      const isReply = !!post?.record?.reply;
+      const isRepost = item.reason?.$type === 'app.bsky.feed.defs#reasonRepost';
+      const reposter = isRepost ? item.reason?.by : null;
+      const repostedAt = isRepost ? (item.reason?.indexedAt || item.reason?.indexed_at) : null;
+
+      const cardPad = compact ? 'p-3' : 'p-4';
+
+      return (
+        <article
+          className={`rounded-2xl shadow-lg ${cardPad} hover:shadow-xl transition-all ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          } animate-fadeIn`}
+          aria-label={`Post by ${post.author?.displayName || post.author?.handle}`}
+        >
+          {isReply && !compact && (
+            <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <Icons.MessageCircle className="w-4 h-4" />
+              <button
+                className="underline-offset-2 hover:underline focus:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const parentUri = post?.record?.reply?.parent?.uri || post?.record?.reply?.root?.uri;
+                  if (parentUri) onOpenThread(parentUri);
+                }}
+                aria-label="View original post this is replying to"
+              >
+                Replying to another post
+              </button>
+            </div>
+          )}
+
+          {isRepost && reposter && !compact && (
+            <div className={`mb-2 flex items-center gap-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <Icons.Repeat className="w-4 h-4" />
+              <span>
+                Reposted by <span className="font-semibold">@{reposter.handle}</span>
+                {repostedAt ? ` · ${Utils.formatTimeAgo(repostedAt)}` : ''}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-start gap-3 mb-3">
+            {post.author?.avatar && (
+              <img
+                src={post.author.avatar}
+                alt=""
+                className={compact ? 'w-9 h-9 rounded-full' : 'w-10 h-10 rounded-full'}
+                onLoad={bumpLayout}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  bumpLayout();
+                }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                {post.author?.displayName || post.author?.handle}
+              </div>
+              <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                @{post.author?.handle}
+              </div>
+            </div>
+            <time 
+              className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}
+              dateTime={post.indexedAt}
+            >
+              {Utils.formatTimeAgo(post.indexedAt)}
+            </time>
+          </div>
+
+          {post.record?.text && (
+            <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+              darkMode ? 'text-gray-200' : 'text-gray-800'
+            }`}>
+              {post.record.text}
+            </p>
+          )}
+
+          {post.embed?.images && post.embed.images.length > 0 && (
+            <div className="mt-3">
+              <img 
+                src={post.embed.images[0].thumb} 
+                alt="" 
+                className="rounded-lg w-full" 
+                onLoad={bumpLayout}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  bumpLayout();
+                }}
+              />
+            </div>
+          )}
+
+          {post.embed?.external && (
+            <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {post.embed.external.thumb && (
+                <img 
+                  src={post.embed.external.thumb} 
+                  alt="" 
+                  className="rounded w-full mb-2" 
+                  onLoad={bumpLayout}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    bumpLayout();
+                  }}
+                />
+              )}
+              <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                {post.embed.external.title}
+              </div>
+              <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                {post.embed.external.uri}
+              </div>
+            </div>
+          )}
+
+          <QuotedRecord embed={post.embed} darkMode={darkMode} bumpLayout={bumpLayout} />
+
+          {!compact && (
+            <div className={`mt-4 flex gap-6 text-sm border-t pt-3 ${
+              darkMode ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'
+            }`}>
+              <button
+                className={`flex items-center gap-1.5 transition-colors ${
+                  (post.replyCount || 0) > 0
+                    ? (darkMode ? 'text-blue-300 hover:text-blue-200' : 'text-blue-600 hover:text-blue-700')
+                    : (darkMode ? 'text-gray-400 hover:text-blue-300' : 'text-gray-500 hover:text-blue-600')
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (post?.uri) onOpenThread(post.uri);
+                }}
+                aria-label={`View thread. ${post.replyCount || 0} replies`}
+              >
+                <Icons.MessageCircle className="w-4 h-4" />
+                {(post.replyCount || 0) > 0 ? (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    darkMode ? 'bg-blue-500/20 text-blue-200' : 'bg-blue-50 text-blue-700'
+                  }`}>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                      darkMode ? 'bg-blue-300' : 'bg-blue-600'
+                    }`} />
+                    {post.replyCount}
+                  </span>
+                ) : (
+                  <span className="text-xs">0</span>
+                )}
+              </button>
+
+              <div className="flex items-center gap-1.5" aria-label={`${post.repostCount || 0} reposts`}>
+                <Icons.Repeat className="w-4 h-4" />
+                <span>{post.repostCount || 0}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5" aria-label={`${post.likeCount || 0} likes`}>
+                <Icons.Heart className="w-4 h-4" />
+                <span>{post.likeCount || 0}</span>
+              </div>
+            </div>
+          )}
+        </article>
+      );
+    };
+
+    // ==================== SIDEBAR ====================
+    const Sidebar = ({ 
+      expanded, 
+      onToggle, 
+      session, 
+      darkMode, 
+      onToggleDarkMode, 
+      onRefresh, 
+      onLogout,
+      onReset,
+      loading 
+    }) => {
+      return (
+        <aside 
+          className={`shadow-lg transition-all duration-300 ${
+            expanded ? 'w-64' : 'w-16'
+          } flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
+          aria-label="Main navigation"
+        >
+          <div className="h-full flex flex-col">
+            <button
+              onClick={onToggle}
+              className={`p-4 transition-colors border-b ${
+                darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'
+              }`}
+              aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+              aria-expanded={expanded}
+            >
+              <Icons.Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+            </button>
+
+            <div className="flex-1 overflow-y-auto">
+              {expanded && (
+                <div className="p-4">
+                  <h2 className={`font-display text-lg font-bold mb-1 ${
+                    darkMode ? 'text-blue-400' : 'text-blue-600'
+                  }`}>
+                    Your Timeline
+                  </h2>
+                  <p className={`text-xs mb-4 truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    @{session?.handle}
+                  </p>
+                </div>
+              )}
+
+              <nav className="space-y-2 px-2" aria-label="Primary navigation">
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  }`}
+                  aria-label="Refresh timeline"
+                  aria-busy={loading}
+                >
+                  <Icons.RefreshCw className={`w-5 h-5 flex-shrink-0 ${
+                    loading ? 'animate-spin' : ''
+                  } ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                  {expanded && <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>Refresh</span>}
+                </button>
+
+                <button
+                  onClick={onToggleDarkMode}
+                  className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  }`}
+                  aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {darkMode ? (
+                    <Icons.Sun className="w-5 h-5 flex-shrink-0 text-yellow-400" />
+                  ) : (
+                    <Icons.Moon className="w-5 h-5 flex-shrink-0 text-blue-600" />
+                  )}
+                  {expanded && (
+                    <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>
+                      {darkMode ? 'Light Mode' : 'Dark Mode'}
+                    </span>
+                  )}
+                </button>
+              </nav>
+            </div>
+
+            <div className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={onLogout}
+                className={`w-full p-4 transition-colors flex items-center gap-3 ${
+                  darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                }`}
+                aria-label="Sign out"
+              >
+                <Icons.LogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
+                {expanded && <span className="text-red-600">Sign Out</span>}
+              </button>
+
+              <button
+                onClick={onReset}
+                className={`w-full p-4 transition-colors flex items-center gap-3 ${
+                  darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                }`}
+                aria-label="Reset session (fixes stuck tabs)"
+              >
+                <Icons.AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0" />
+                {expanded && <span className="text-orange-500">Reset Session</span>}
+              </button>
+            </div>
+          </div>
+        </aside>
+      );
+    };
+
+    // ==================== THREAD MODAL ====================
+    const ThreadModal = ({ 
+      open, 
+      loading, 
+      error, 
+      items, 
+      focusUri, 
+      darkMode, 
+      onClose, 
+      onRefresh,
+      bumpLayout 
+    }) => {
+      const modalRef = useRef(null);
+
+      useEffect(() => {
+        if (open) {
+          // Trap focus in modal
+          const focusableElements = modalRef.current?.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          const firstElement = focusableElements?.[0];
+          const lastElement = focusableElements?.[focusableElements.length - 1];
+
+          const handleTab = (e) => {
+            if (e.key === 'Tab') {
+              if (e.shiftKey && document.activeElement === firstElement) {
+                e.preventDefault();
+                lastElement?.focus();
+              } else if (!e.shiftKey && document.activeElement === lastElement) {
+                e.preventDefault();
+                firstElement?.focus();
+              }
+            }
+            
+            if (e.key === 'Escape') {
+              onClose();
+            }
+          };
+
+          document.addEventListener('keydown', handleTab);
+          firstElement?.focus();
+
+          return () => {
+            document.removeEventListener('keydown', handleTab);
+          };
+        }
+      }, [open, onClose]);
+
+      if (!open) return null;
+
+      return (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center animate-fadeIn" 
+          role="dialog" 
+          aria-modal="true"
+          aria-labelledby="thread-modal-title"
+          onClick={onClose}
+        >
+          <div className={`absolute inset-0 ${darkMode ? 'bg-black/70' : 'bg-black/50'}`} />
+
+          <div
+            ref={modalRef}
+            className={`relative w-[min(900px,95vw)] max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden ${
+              darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${
+              darkMode ? 'border-gray-800' : 'border-gray-200'
+            }`}>
+              <div className="min-w-0">
+                <h2 id="thread-modal-title" className="font-display text-lg font-semibold">Thread</h2>
+                {focusUri && (
+                  <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {focusUri}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                  } disabled:opacity-50`}
+                  aria-label="Refresh thread"
+                  aria-busy={loading}
+                >
+                  {loading ? 'Loading...' : 'Refresh'}
+                </button>
+                <button
+                  onClick={onClose}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                  aria-label="Close thread modal"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto column-scroll" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+              {error && (
+                <div 
+                  className={`mb-4 px-4 py-3 rounded-xl text-sm flex gap-2 ${
+                    darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <Icons.AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {loading && items.length === 0 && (
+                <div className="py-10 text-center">
+                  <Icons.RefreshCw className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-3" />
+                  <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading thread...</div>
+                </div>
+              )}
+
+              {!loading && items.length === 0 && !error && (
+                <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>No thread data available.</div>
+              )}
+
+              <div className="space-y-4">
+                {items.map((it) => {
+                  const isFocus = it.post?.uri === focusUri;
+                  return (
+                    <div 
+                      key={it.post.uri} 
+                      style={{ paddingLeft: it.depth ? Math.min(it.depth * 16, 48) : 0 }}
+                    >
+                      {isFocus && (
+                        <div className={`rounded-2xl p-[2px] ${
+                          darkMode ? 'bg-blue-500/30' : 'bg-blue-200'
+                        }`}>
+                          <div className="rounded-2xl">
+                            <ThreadPost post={it.post} darkMode={darkMode} bumpLayout={bumpLayout} />
+                          </div>
+                        </div>
+                      )}
+                      {!isFocus && (
+                        <ThreadPost post={it.post} darkMode={darkMode} bumpLayout={bumpLayout} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ThreadPost = ({ post, darkMode, bumpLayout }) => {
+      return (
+        <article
+          className={`rounded-xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-4`}
+          aria-label={`Thread post by ${post.author?.displayName || post.author?.handle}`}
+        >
+          <div className="flex items-start gap-3 mb-2">
+            {post.author?.avatar && (
+              <img
+                src={post.author.avatar}
+                alt=""
+                className="w-9 h-9 rounded-full"
+                onLoad={bumpLayout}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  bumpLayout();
+                }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                {post.author?.displayName || post.author?.handle}
+              </div>
+              <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                @{post.author?.handle}
+              </div>
+            </div>
+            <time 
+              className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}
+              dateTime={post.indexedAt}
+            >
+              {Utils.formatTimeAgo(post.indexedAt)}
+            </time>
+          </div>
+
+          {post.record?.text && (
+            <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+              darkMode ? 'text-gray-200' : 'text-gray-800'
+            }`}>
+              {post.record.text}
+            </p>
+          )}
+
+          {post.embed?.images && post.embed.images.length > 0 && (
+            <div className="mt-3">
+              <img 
+                src={post.embed.images[0].thumb} 
+                alt="" 
+                className="rounded-lg w-full" 
+                onLoad={bumpLayout}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  bumpLayout();
+                }}
+              />
+            </div>
+          )}
+
+          {post.embed?.external && (
+            <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {post.embed.external.thumb && (
+                <img 
+                  src={post.embed.external.thumb} 
+                  alt="" 
+                  className="rounded w-full mb-2" 
+                  onLoad={bumpLayout}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    bumpLayout();
+                  }}
+                />
+              )}
+              <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                {post.embed.external.title}
+              </div>
+              <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                {post.embed.external.uri}
+              </div>
+            </div>
+          )}
+
+          <QuotedRecord embed={post.embed} darkMode={darkMode} bumpLayout={bumpLayout} />
+        </article>
+      );
+    };
+
+    // ==================== MAIN APP ====================
+    function BlueskyColumnFeed() {
+      const auth = useAuth();
+      const { makeAuthenticatedRequest } = useBlueskyAPI(auth.session, auth.refreshAccessToken);
+      
+      const [posts, setPosts] = useState([]);
+      const [columns, setColumns] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [currentColumn, setCurrentColumn] = useState(0);
+      const [darkMode, setDarkMode] = useState(false);
+      const [sidebarExpanded, setSidebarExpanded] = useState(false);
+
+      const { columnWidthPx, columnViewportHeightPx, pageWidthPx, bumpLayout } = useLayout(sidebarExpanded);
+
+      // Thread state
+      const [threadState, setThreadState] = useState({
+        open: false,
+        loading: false,
+        error: '',
+        focusUri: null,
+        items: [],
+      });
+
+      // Swipe state
+      const [dragX, setDragX] = useState(0);
+      const [isDragging, setIsDragging] = useState(false);
+      const [isAnimating, setIsAnimating] = useState(false);
+      
+      // Refs
+      const measureRefs = useRef([]);
+      const columnScrollRefs = useRef(new Map());
+      const pointerSwipeRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0 });
+      const velocityRef = useRef({ v: 0, lastX: 0, lastT: 0 });
+      const isSyncingScrollRef = useRef(false);
+      const rafIdRef = useRef(null);
+      const lastScrollTopRef = useRef(0);
+
+      // Initialize
+      useEffect(() => {
+        try {
+          const savedDarkMode = localStorage.getItem('darkMode');
+          if (savedDarkMode) {
+            setDarkMode(savedDarkMode === 'true');
+          }
+        } catch (err) {
+          console.error('Failed to load dark mode preference:', err);
+        }
+
+        const restoredSession = auth.restoreSession();
+        if (restoredSession) {
+          fetchTimeline(restoredSession);
+        }
+      }, []);
+
+      // Token refresh interval
+      useEffect(() => {
+        if (!auth.session?.refreshJwt) return;
+        
+        const interval = setInterval(() => {
+          auth.refreshAccessToken(auth.session).catch((err) => {
+            console.error('Failed to refresh token:', err);
+          });
+        }, CONSTANTS.TOKEN_REFRESH_INTERVAL_MS);
+        
+        return () => clearInterval(interval);
+      }, [auth.session?.refreshJwt, auth.refreshAccessToken]);
+
+      // Cleanup
+      useEffect(() => {
+        return () => {
+          if (rafIdRef.current) {
+            cancelAnimationFrame(rafIdRef.current);
+          }
+          columnScrollRefs.current.clear();
+        };
+      }, []);
+
+      const syncScrollTop = useCallback((fromEl, top) => {
+        if (isSyncingScrollRef.current) return;
+
+        lastScrollTopRef.current = top;
+        if (rafIdRef.current != null) return;
+
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = null;
+          isSyncingScrollRef.current = true;
+
+          const targetTop = lastScrollTopRef.current;
+          for (const el of columnScrollRefs.current.values()) {
+            if (!el || el === fromEl) continue;
+            if (Math.abs(el.scrollTop - targetTop) > 1) {
+              el.scrollTop = targetTop;
+            }
+          }
+
+          isSyncingScrollRef.current = false;
+        });
+      }, []);
+
+      const toggleDarkMode = useCallback(() => {
+        setDarkMode((prev) => {
+          const next = !prev;
+          try {
+            localStorage.setItem('darkMode', next.toString());
+          } catch (err) {
+            console.error('Failed to save dark mode preference:', err);
+          }
+          bumpLayout();
+          return next;
+        });
+      }, [bumpLayout]);
+
+      const fetchTimeline = useCallback(async (sess = auth.session) => {
+        if (!sess?.accessJwt) {
+          console.warn('No session available for fetching timeline');
+          return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+          const data = await makeAuthenticatedRequest(`${API_ENDPOINTS.GET_TIMELINE}?limit=50`);
+          setPosts(data.feed || []);
+          setCurrentColumn(0);
+          setDragX(0);
+          bumpLayout();
+        } catch (err) {
+          console.error('Error fetching timeline:', err);
+          setError(`Failed to load timeline: ${err.message}`);
+        } finally {
+          setLoading(false);
+        }
+      }, [auth.session, makeAuthenticatedRequest, bumpLayout]);
+
+      const handleLogout = useCallback(() => {
+        auth.clearSession();
+        setPosts([]);
+        setColumns([]);
+        setCurrentColumn(0);
+        setDragX(0);
+      }, [auth]);
+
+      const handleReset = useCallback(() => {
+        auth.clearSession();
+        window.location.reload();
+      }, [auth]);
+
+      const openThread = useCallback(async (uri) => {
+        if (!uri || !auth.session?.accessJwt) return;
+
+        setThreadState({
+          open: true,
+          loading: true,
+          error: '',
+          focusUri: uri,
+          items: [],
+        });
+
+        try {
+          const data = await makeAuthenticatedRequest(
+            `${API_ENDPOINTS.GET_POST_THREAD}?uri=${encodeURIComponent(uri)}&depth=${CONSTANTS.MAX_THREAD_DEPTH}&parentHeight=10`
+          );
+
+          // Flatten thread
+          const flattenThread = (node, out, depth = 0) => {
+            if (!node) return;
+            if (node.parent) flattenThread(node.parent, out, Math.min(depth + 1, CONSTANTS.MAX_THREAD_DEPTH));
+            if (node.post) out.push({ post: node.post, depth });
+            if (Array.isArray(node.replies)) {
+              for (const r of node.replies) {
+                if (!r?.post) continue;
+                out.push({ post: r.post, depth: Math.min(depth + 1, CONSTANTS.MAX_THREAD_DEPTH) });
+                if (Array.isArray(r.replies)) {
+                  for (const rr of r.replies) {
+                    if (!rr?.post) continue;
+                    out.push({ post: rr.post, depth: Math.min(depth + 2, CONSTANTS.MAX_THREAD_DEPTH) });
+                  }
+                }
+              }
+            }
+          };
+
+          const out = [];
+          flattenThread(data?.thread, out, 0);
+
+          // De-duplicate
+          const seen = new Set();
+          const unique = [];
+          for (const it of out) {
+            const u = it?.post?.uri;
+            if (!u || seen.has(u)) continue;
+            seen.add(u);
+            unique.push(it);
+          }
+
+          setThreadState((prev) => ({
+            ...prev,
+            items: unique,
+            loading: false,
+          }));
+        } catch (err) {
+          console.error('Error fetching thread:', err);
+          setThreadState((prev) => ({
+            ...prev,
+            error: err?.message || 'Failed to load thread',
+            loading: false,
+          }));
+        }
+      }, [auth.session, makeAuthenticatedRequest]);
+
+      const closeThread = useCallback(() => {
+        setThreadState({
+          open: false,
+          loading: false,
+          error: '',
+          focusUri: null,
+          items: [],
+        });
+      }, []);
+
+      // Pack posts into columns
       useEffect(() => {
         if (!posts || posts.length === 0) {
           setColumns([]);
@@ -997,7 +1632,7 @@ const lastScrollTopRef = useRef(0);
 
         const heights = posts.map((_, i) => {
           const el = measureRefs.current[i];
-          if (!el) return 320;
+          if (!el) return CONSTANTS.MIN_CARD_HEIGHT;
           return Math.ceil(el.getBoundingClientRect().height);
         });
 
@@ -1007,7 +1642,7 @@ const lastScrollTopRef = useRef(0);
 
         for (let i = 0; i < posts.length; i++) {
           const h = heights[i];
-          const addH = col.length === 0 ? h : h + CARD_GAP_PX;
+          const addH = col.length === 0 ? h : h + CONSTANTS.CARD_GAP_PX;
 
           if (col.length === 0 || colHeight + addH <= columnViewportHeightPx) {
             col.push(posts[i]);
@@ -1021,243 +1656,216 @@ const lastScrollTopRef = useRef(0);
         if (col.length > 0) newCols.push(col);
 
         setColumns(newCols);
-        setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - COLUMNS_TO_SHOW)));
-      }, [posts, columnWidthPx, columnViewportHeightPx, sidebarExpanded, darkMode, layoutTick]);
+        setCurrentColumn((prev) => Math.min(prev, Math.max(0, newCols.length - CONSTANTS.COLUMNS_TO_SHOW)));
+      }, [posts, columnWidthPx, columnViewportHeightPx, darkMode]);
 
-      // Helper: render a page (3 columns) starting at startIdx
-      const renderPage = (startIdx, keyPrefix) => {
-        return Array.from({ length: COLUMNS_TO_SHOW }).map((_, idx) => {
+      // Swipe handlers
+      const totalColumns = columns.length;
+      const maxColumnIndex = Math.max(0, totalColumns - CONSTANTS.COLUMNS_TO_SHOW);
+
+      const animateDragTo = useCallback((targetDragX, onDone) => {
+        setIsAnimating(true);
+        setDragX(targetDragX);
+        setTimeout(() => {
+          setIsAnimating(false);
+          onDone?.();
+        }, CONSTANTS.SWIPE_ANIMATION_DURATION);
+      }, []);
+
+      const goNextWithAnimation = useCallback(() => {
+        if (currentColumn >= maxColumnIndex) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+        animateDragTo(-pageWidthPx, () => {
+          setCurrentColumn((c) => Math.min(maxColumnIndex, c + CONSTANTS.COLUMNS_TO_SHOW));
+          setDragX(0);
+        });
+      }, [currentColumn, maxColumnIndex, pageWidthPx, animateDragTo]);
+
+      const goPrevWithAnimation = useCallback(() => {
+        if (currentColumn === 0) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+        animateDragTo(pageWidthPx, () => {
+          setCurrentColumn((c) => Math.max(0, c - CONSTANTS.COLUMNS_TO_SHOW));
+          setDragX(0);
+        });
+      }, [currentColumn, pageWidthPx, animateDragTo]);
+
+      const onPointerDown = useCallback((e) => {
+        if (e.pointerType === 'mouse' || isAnimating) return;
+
+        pointerSwipeRef.current = {
+          active: true,
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          lastX: e.clientX,
+          lastY: e.clientY,
+        };
+
+        velocityRef.current = {
+          v: 0,
+          lastX: e.clientX,
+          lastT: performance.now(),
+        };
+
+        setIsDragging(true);
+        setDragX(0);
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }, [isAnimating]);
+
+      const onPointerMove = useCallback((e) => {
+        if (!pointerSwipeRef.current.active || pointerSwipeRef.current.pointerId !== e.pointerId) {
+          return;
+        }
+
+        pointerSwipeRef.current.lastX = e.clientX;
+        pointerSwipeRef.current.lastY = e.clientY;
+
+        const dx = e.clientX - pointerSwipeRef.current.startX;
+        const dy = e.clientY - pointerSwipeRef.current.startY;
+
+        // Ignore vertical scrolls
+        if (Math.abs(dy) > Math.abs(dx) * 1.1) return;
+
+        const now = performance.now();
+        const dt = Math.max(1, now - velocityRef.current.lastT);
+        const instV = (e.clientX - velocityRef.current.lastX) / dt;
+        velocityRef.current.v = velocityRef.current.v * 0.8 + instV * 0.2;
+        velocityRef.current.lastX = e.clientX;
+        velocityRef.current.lastT = now;
+
+        const maxPull = pageWidthPx * CONSTANTS.SWIPE_MAX_PULL_RATIO;
+        let finalDx = Utils.clamp(dx, -maxPull, maxPull);
+
+        const atStart = currentColumn === 0;
+        const atEnd = currentColumn >= maxColumnIndex;
+        
+        if ((atStart && finalDx > 0) || (atEnd && finalDx < 0)) {
+          finalDx *= CONSTANTS.SWIPE_RESISTANCE_FACTOR;
+        }
+
+        setDragX(finalDx);
+      }, [pageWidthPx, currentColumn, maxColumnIndex]);
+
+      const onPointerUpOrCancel = useCallback(() => {
+        if (!pointerSwipeRef.current.active) return;
+        
+        pointerSwipeRef.current.active = false;
+        pointerSwipeRef.current.pointerId = null;
+        setIsDragging(false);
+
+        const dx = pointerSwipeRef.current.lastX - pointerSwipeRef.current.startX;
+        const dy = pointerSwipeRef.current.lastY - pointerSwipeRef.current.startY;
+
+        if (Math.abs(dy) > Math.abs(dx) * 0.9) {
+          animateDragTo(0, () => setDragX(0));
+          return;
+        }
+
+        const v = velocityRef.current.v;
+        const projectedDx = dx + v * CONSTANTS.SWIPE_PROJECTION_MS;
+        const distanceThreshold = Math.min(
+          CONSTANTS.SWIPE_DISTANCE_THRESHOLD_PX,
+          pageWidthPx * CONSTANTS.SWIPE_DISTANCE_THRESHOLD_RATIO
+        );
+
+        const shouldGoNext = projectedDx < -distanceThreshold || v < -CONSTANTS.SWIPE_VELOCITY_THRESHOLD;
+        const shouldGoPrev = projectedDx > distanceThreshold || v > CONSTANTS.SWIPE_VELOCITY_THRESHOLD;
+
+        if (shouldGoNext) return goNextWithAnimation();
+        if (shouldGoPrev) return goPrevWithAnimation();
+
+        animateDragTo(0, () => setDragX(0));
+      }, [pageWidthPx, animateDragTo, goNextWithAnimation, goPrevWithAnimation]);
+
+      const pagePrev = useCallback(() => {
+        setCurrentColumn((c) => Math.max(0, c - CONSTANTS.COLUMNS_TO_SHOW));
+      }, []);
+
+      const pageNext = useCallback(() => {
+        setCurrentColumn((c) => Math.min(maxColumnIndex, c + CONSTANTS.COLUMNS_TO_SHOW));
+      }, [maxColumnIndex]);
+
+      const renderPage = useCallback((startIdx, keyPrefix) => {
+        const columnStyle = {
+          flex: `0 0 ${columnWidthPx}px`,
+          maxWidth: `${columnWidthPx}px`,
+          minWidth: 0,
+        };
+
+        return Array.from({ length: CONSTANTS.COLUMNS_TO_SHOW }).map((_, idx) => {
           const columnIndex = startIdx + idx;
           const isValid = columnIndex >= 0 && columnIndex < columns.length;
           const colItems = isValid ? (columns[columnIndex] || []) : [];
 
           return (
             <div key={`${keyPrefix}-${idx}-${columnIndex}`} className="flex-shrink-0" style={columnStyle}>
-<div
-  className={`column-scroll space-y-4 pb-10 overflow-y-auto ${isValid ? '' : 'opacity-40'}`}
-  style={{ maxHeight: 'calc(100vh - 2rem)' }}
-  ref={(el) => {
-    if (el) columnScrollRefs.current.set(columnIndex, el);
-    else columnScrollRefs.current.delete(columnIndex);
-  }}
-  onScroll={(e) =>
-    syncScrollTop(e.currentTarget, e.currentTarget.scrollTop)
-  }
->
+              <div
+                className={`column-scroll space-y-4 pb-10 overflow-y-auto ${isValid ? '' : 'opacity-40'}`}
+                style={{ maxHeight: 'calc(100vh - 2rem)' }}
+                ref={(el) => {
+                  if (el) columnScrollRefs.current.set(columnIndex, el);
+                  else columnScrollRefs.current.delete(columnIndex);
                 }}
+                onScroll={(e) => syncScrollTop(e.currentTarget, e.currentTarget.scrollTop)}
               >
                 {!isValid && (
-                  <div className={`rounded-xl p-4 ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-400'} shadow-lg`}>
+                  <div className={`rounded-2xl p-4 ${
+                    darkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-400'
+                  } shadow-lg`}>
                     <div className="text-sm">No more columns</div>
                   </div>
                 )}
 
                 {colItems.map((item) => (
                   <PostCard
-                    key={(item.post?.uri || '') + '::' + (item.reason?.by?.did || '') + '::' + (item.reason?.indexedAt || '') + `::${keyPrefix}`}
+                    key={`${item.post?.uri || ''}-${item.reason?.by?.did || ''}-${item.reason?.indexedAt || ''}-${keyPrefix}`}
                     item={item}
+                    darkMode={darkMode}
+                    bumpLayout={bumpLayout}
+                    onOpenThread={openThread}
                   />
                 ))}
               </div>
             </div>
           );
         });
-      };
+      }, [columns, columnWidthPx, darkMode, bumpLayout, openThread, syncScrollTop]);
 
-      // ---------- Login screen ----------
-      if (!isLoggedIn) {
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
-            <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-              <div className="text-center mb-6">
-                <h1 className="text-3xl font-bold text-indigo-600 mb-2">Bluesky Column Feed</h1>
-                <p className="text-gray-600">View your timeline in columns</p>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex gap-2">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Handle or Email</label>
-                  <input
-                    type="text"
-                    value={handle}
-                    onChange={(e) => setHandle(e.target.value)}
-                    placeholder="username.bsky.social"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    disabled={needsAuthCode}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">App Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••-••••-••••-••••"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    disabled={needsAuthCode}
-                    onKeyPress={(e) => e.key === 'Enter' && !loading && handle && password && login()}
-                  />
-                </div>
-
-                {needsAuthCode && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
-                    <input
-                      type="text"
-                      value={authCode}
-                      onChange={(e) => setAuthCode(e.target.value)}
-                      placeholder="Enter code from email"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      autoFocus
-                      onKeyPress={(e) => e.key === 'Enter' && !loading && authCode && login()}
-                    />
-                  </div>
-                )}
-
-                <button
-                  onClick={login}
-                  disabled={loading || !handle || !password || (needsAuthCode && !authCode)}
-                  className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? 'Logging in...' : needsAuthCode ? 'Verify Code' : 'Login'}
-                </button>
-
-                {needsAuthCode && (
-                  <button
-                    onClick={() => {
-                      setNeedsAuthCode(false);
-                      setAuthCode('');
-                      setError('');
-                    }}
-                    className="w-full text-indigo-600 py-2 rounded-lg font-semibold hover:bg-indigo-50 transition-colors"
-                  >
-                    Back
-                  </button>
-                )}
-
-                <button
-                  onClick={hardReset}
-                  className="w-full mt-2 text-orange-600 py-2 rounded-lg font-semibold hover:bg-orange-50 transition-colors"
-                >
-                  Reset Session (fix stuck tabs)
-                </button>
-              </div>
-
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <p className="text-xs text-gray-700">
-                  <strong>Tip:</strong> Use an App Password (not your main password) for security.
-                  Create one in Settings → App Passwords on Bluesky.
-                </p>
-              </div>
-            </div>
-          </div>
-        );
+      if (!auth.isLoggedIn) {
+        return <LoginScreen onLogin={auth.persistSession} />;
       }
 
-      // ---------- Main app ----------
       return (
-        <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 to-indigo-100'}`}>
-          {/* Sidebar */}
-          <div className={`shadow-lg transition-all duration-300 ${sidebarExpanded ? 'w-64' : 'w-16'} flex-shrink-0 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-            <div className="h-full flex flex-col">
-              <button
-                onClick={() => {
-                  setSidebarExpanded(!sidebarExpanded);
-                  bumpLayout();
-                }}
-                className={`p-4 transition-colors border-b ${darkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-100 border-gray-200'}`}
-              >
-                <Menu className={`w-6 h-6 mx-auto ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
-              </button>
+        <div className={`min-h-screen flex ${
+          darkMode ? 'dark bg-gray-900' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50'
+        }`}>
+          <Sidebar
+            expanded={sidebarExpanded}
+            onToggle={() => {
+              setSidebarExpanded((prev) => !prev);
+              bumpLayout();
+            }}
+            session={auth.session}
+            darkMode={darkMode}
+            onToggleDarkMode={toggleDarkMode}
+            onRefresh={() => fetchTimeline(auth.session)}
+            onLogout={handleLogout}
+            onReset={handleReset}
+            loading={loading}
+          />
 
-              <div className="flex-1 overflow-y-auto">
-                {sidebarExpanded && (
-                  <div className="p-4">
-                    <h2 className={`text-lg font-bold mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>Your Timeline</h2>
-                    <p className={`text-xs mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>@{session?.handle}</p>
-                  </div>
-                )}
-
-                <nav className="space-y-2 px-2">
-                  <button
-                    onClick={refresh}
-                    disabled={loading}
-                    className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                    title="Refresh"
-                  >
-                    <RefreshCw className={`w-5 h-5 flex-shrink-0 ${loading ? 'animate-spin' : ''} ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
-                    {sidebarExpanded && <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>Refresh</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setError('Search coming soon!')}
-                    className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                    title="Search"
-                  >
-                    <Search className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
-                    {sidebarExpanded && <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>Search</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setError('Popular posts coming soon!')}
-                    className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                    title="Popular Posts"
-                  >
-                    <TrendingUp className={`w-5 h-5 flex-shrink-0 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
-                    {sidebarExpanded && <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>Popular Posts</span>}
-                  </button>
-
-                  <button
-                    onClick={toggleDarkMode}
-                    className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                    title="Toggle Theme"
-                  >
-                    {darkMode ? <Sun className="w-5 h-5 flex-shrink-0 text-yellow-400" /> : <Moon className="w-5 h-5 flex-shrink-0 text-indigo-600" />}
-                    {sidebarExpanded && (
-                      <span className={darkMode ? 'text-gray-200' : 'text-gray-700'}>
-                        {darkMode ? 'Light Mode' : 'Dark Mode'}
-                      </span>
-                    )}
-                  </button>
-                </nav>
-              </div>
-
-              <div className={`border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                <button
-                  onClick={logout}
-                  className={`w-full p-4 transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                  title="Sign Out"
-                >
-                  <LogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  {sidebarExpanded && <span className="text-red-600">Sign Out</span>}
-                </button>
-
-                <button
-                  onClick={hardReset}
-                  className={`w-full p-4 transition-colors flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                  title="Reset saved session (fixes stuck tabs)"
-                >
-                  <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0" />
-                  {sidebarExpanded && <span className="text-orange-500">Reset Session</span>}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Main */}
-          <div className="flex-1 overflow-hidden">
+          <main className="flex-1 overflow-hidden">
             {error && (
-              <div className="p-4">
-                <div className={`px-3 py-2 rounded-lg text-sm flex gap-2 ${darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div className="p-4" role="alert" aria-live="polite">
+                <div className={`px-4 py-3 rounded-xl text-sm flex gap-2 ${
+                  darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'
+                }`}>
+                  <Icons.AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
               </div>
@@ -1265,14 +1873,16 @@ const lastScrollTopRef = useRef(0);
 
             {loading && posts.length === 0 && (
               <div className="p-8 text-center">
-                <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-                <p className="text-gray-600">Loading your timeline...</p>
+                <Icons.RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+                <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Loading your timeline...</p>
               </div>
             )}
 
             {!loading && posts.length === 0 && (
               <div className="p-8 text-center">
-                <p className="text-gray-600">No posts to display. Try refreshing!</p>
+                <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                  No posts to display. Try refreshing!
+                </p>
               </div>
             )}
 
@@ -1285,18 +1895,17 @@ const lastScrollTopRef = useRef(0);
                 onPointerUp={onPointerUpOrCancel}
                 onPointerCancel={onPointerUpOrCancel}
               >
-                {/* Peek strip: prev + current + next pages */}
                 <div
                   className="flex gap-4"
                   style={{
-                    transform: `translate3d(${(-pageWidthPx + dragX)}px, 0, 0)`,
+                    transform: `translate3d(${-pageWidthPx + dragX}px, 0, 0)`,
                     transition: isDragging ? 'none' : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                     willChange: 'transform',
                   }}
                 >
-                  {renderPage(currentColumn - COLUMNS_TO_SHOW, 'prev')}
+                  {renderPage(currentColumn - CONSTANTS.COLUMNS_TO_SHOW, 'prev')}
                   {renderPage(currentColumn, 'cur')}
-                  {renderPage(currentColumn + COLUMNS_TO_SHOW, 'next')}
+                  {renderPage(currentColumn + CONSTANTS.COLUMNS_TO_SHOW, 'next')}
                 </div>
               </div>
             )}
@@ -1306,162 +1915,60 @@ const lastScrollTopRef = useRef(0);
                 <button
                   onClick={pagePrev}
                   disabled={currentColumn === 0}
-                  className={`fixed left-20 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-                  title="Previous columns"
+                  className={`fixed left-20 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-xl disabled:opacity-30 disabled:cursor-not-allowed z-10 transition-all ${
+                    darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'
+                  }`}
+                  aria-label="Previous columns"
                 >
-                  <ChevronLeft />
+                  <Icons.ChevronLeft />
                 </button>
 
                 <button
                   onClick={pageNext}
                   disabled={currentColumn >= maxColumnIndex}
-                  className={`fixed right-4 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-lg disabled:opacity-30 disabled:cursor-not-allowed z-10 ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}`}
-                  title="Next columns"
+                  className={`fixed right-4 top-1/2 -translate-y-1/2 p-3 rounded-full shadow-xl disabled:opacity-30 disabled:cursor-not-allowed z-10 transition-all ${
+                    darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'
+                  }`}
+                  aria-label="Next columns"
                 >
-                  <ChevronRight />
+                  <Icons.ChevronRight />
                 </button>
               </>
             )}
 
-            {/* Thread modal */}
-            {threadOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" onClick={closeThread}>
-                <div className={`absolute inset-0 ${darkMode ? 'bg-black/70' : 'bg-black/50'}`} />
+            <ThreadModal
+              open={threadState.open}
+              loading={threadState.loading}
+              error={threadState.error}
+              items={threadState.items}
+              focusUri={threadState.focusUri}
+              darkMode={darkMode}
+              onClose={closeThread}
+              onRefresh={() => threadState.focusUri && openThread(threadState.focusUri)}
+              bumpLayout={bumpLayout}
+            />
 
-                <div
-                  className={`relative w-[min(900px,95vw)] max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className={`flex items-center justify-between px-4 py-3 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold">Thread</div>
-                      {threadFocusUri && <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{threadFocusUri}</div>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => threadFocusUri && openThread(threadFocusUri)}
-                        disabled={threadLoading}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} disabled:opacity-50`}
-                      >
-                        {threadLoading ? 'Loading…' : 'Refresh'}
-                      </button>
-                      <button
-                        onClick={closeThread}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-4 overflow-y-auto column-scroll" style={{ maxHeight: 'calc(85vh - 56px)' }}>
-                    {threadError && (
-                      <div className={`mb-4 px-3 py-2 rounded-lg text-sm flex gap-2 ${darkMode ? 'bg-red-900 border border-red-700 text-red-200' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>{threadError}</span>
-                      </div>
-                    )}
-
-                    {threadLoading && threadItems.length === 0 && (
-                      <div className="py-10 text-center">
-                        <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
-                        <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading thread…</div>
-                      </div>
-                    )}
-
-                    {!threadLoading && threadItems.length === 0 && !threadError && (
-                      <div className={darkMode ? 'text-gray-300' : 'text-gray-600'}>No thread data.</div>
-                    )}
-
-                    <div className="space-y-4">
-                      {threadItems.map((it) => {
-                        const isFocus = it.post?.uri === threadFocusUri;
-                        return (
-                          <div key={it.post.uri} style={{ paddingLeft: it.depth ? Math.min(it.depth * 16, 48) : 0 }}>
-                            <div className={isFocus ? `rounded-2xl p-[2px] ${darkMode ? 'bg-indigo-500/30' : 'bg-indigo-200'}` : ''}>
-                              <div className={isFocus ? 'rounded-2xl' : ''}>
-                                <div
-                                  className={`rounded-xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} p-3`}
-                                  onClick={() => it.post?.uri && openThread(it.post.uri)}
-                                  role="button"
-                                  tabIndex={0}
-                                >
-                                  <div className="flex items-start gap-3 mb-2">
-                                    {it.post.author?.avatar && (
-                                      <img
-                                        src={it.post.author.avatar}
-                                        alt={it.post.author.displayName || it.post.author.handle}
-                                        className="w-9 h-9 rounded-full"
-                                        onLoad={bumpLayout}
-                                      />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <div className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                        {it.post.author?.displayName || it.post.author?.handle}
-                                      </div>
-                                      <div className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        @{it.post.author?.handle}
-                                      </div>
-                                    </div>
-                                    <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                                      {formatTimeAgo(it.post.indexedAt)}
-                                    </span>
-                                  </div>
-
-                                  {it.post.record?.text && (
-                                    <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                                      {it.post.record.text}
-                                    </p>
-                                  )}
-
-                                  {it.post.embed?.images && it.post.embed.images.length > 0 && (
-                                    <div className="mt-3">
-                                      <img src={it.post.embed.images[0].thumb} alt="" className="rounded-lg w-full" onLoad={bumpLayout} />
-                                    </div>
-                                  )}
-
-                                  {it.post.embed?.external && (
-                                    <div className={`mt-3 border rounded-lg p-3 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                                      {it.post.embed.external.thumb && (
-                                        <img src={it.post.embed.external.thumb} alt="" className="rounded w-full mb-2" onLoad={bumpLayout} />
-                                      )}
-                                      <div className={`text-xs font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                        {it.post.embed.external.title}
-                                      </div>
-                                      <div className={`text-xs truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        {it.post.embed.external.uri}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {renderQuotedRecord(it.post.embed)}
-
-                                  <div className={`mt-3 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    Tap to drill into this post’s thread
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Hidden measurement column (offscreen) */}
+            {/* Hidden measurement column */}
             {posts.length > 0 && (
               <div
-                style={{ position: 'fixed', left: -10000, top: 0, width: columnWidthPx + 'px', pointerEvents: 'none', opacity: 0 }}
+                style={{
+                  position: 'fixed',
+                  left: -10000,
+                  top: 0,
+                  width: columnWidthPx + 'px',
+                  pointerEvents: 'none',
+                  opacity: 0,
+                }}
+                aria-hidden="true"
               >
                 <div className="space-y-4">
                   {posts.map((item, i) => (
                     <PostCard
-                      key={(item.post?.uri || '') + '::measure'}
+                      key={`${item.post?.uri || ''}-measure`}
                       item={item}
-                      measuring={true}
+                      darkMode={darkMode}
+                      bumpLayout={bumpLayout}
+                      onOpenThread={openThread}
                       setRef={(el) => {
                         measureRefs.current[i] = el;
                       }}
@@ -1470,13 +1977,18 @@ const lastScrollTopRef = useRef(0);
                 </div>
               </div>
             )}
-          </div>
+          </main>
         </div>
       );
     }
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<BlueskyColumnFeed />);
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <ErrorBoundary>
+        <BlueskyColumnFeed />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
