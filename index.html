@@ -1815,10 +1815,15 @@
         setTimeout(() => {
           // Disable transitions before resetting state
           setIsAnimating(true);
-          onDone?.();
-          // Re-enable transitions after the state update is painted
+          // Use requestAnimationFrame to batch with next paint
           requestAnimationFrame(() => {
-            setIsAnimating(false);
+            onDone?.();
+            // Wait for two more frames to ensure paint is complete
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setIsAnimating(false);
+              });
+            });
           });
         }, CONSTANTS.SWIPE_ANIMATION_DURATION);
       }, []);
