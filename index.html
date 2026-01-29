@@ -160,6 +160,31 @@
       const [sidebarExpanded, setSidebarExpanded] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
 
+      const columnScrollRefs = useRef(new Map()); // key -> element
+const isSyncingScrollRef = useRef(false);
+const rafIdRef = useRef(null);
+const lastScrollTopRef = useRef(0);
+      function syncScrollTop(fromEl, top) {
+  if (isSyncingScrollRef.current) return;
+
+  // throttle to animation frame
+  lastScrollTopRef.current = top;
+  if (rafIdRef.current != null) return;
+
+  rafIdRef.current = requestAnimationFrame(() => {
+    rafIdRef.current = null;
+    isSyncingScrollRef.current = true;
+
+    const targetTop = lastScrollTopRef.current;
+    for (const el of columnScrollRefs.current.values()) {
+      if (!el || el === fromEl) continue;
+      if (Math.abs(el.scrollTop - targetTop) > 1) el.scrollTop = targetTop;
+    }
+
+    isSyncingScrollRef.current = false;
+  });
+}
+      
       // thread modal
       const [threadOpen, setThreadOpen] = useState(false);
       const [threadLoading, setThreadLoading] = useState(false);
@@ -1008,14 +1033,17 @@
 
           return (
             <div key={`${keyPrefix}-${idx}-${columnIndex}`} className="flex-shrink-0" style={columnStyle}>
-              <div
-                className={`column-scroll space-y-4 pb-10 overflow-y-auto ${isValid ? '' : 'opacity-40'}`}
-                style={{ maxHeight: 'calc(100vh - 2rem)' }}
-                onScroll={(e) => {
-                  const top = e.currentTarget.scrollTop;
-                  document.querySelectorAll('.column-scroll').forEach((el) => {
-                    if (el !== e.currentTarget) el.scrollTop = top;
-                  });
+<div
+  className={`column-scroll space-y-4 pb-10 overflow-y-auto ${isValid ? '' : 'opacity-40'}`}
+  style={{ maxHeight: 'calc(100vh - 2rem)' }}
+  ref={(el) => {
+    if (el) columnScrollRefs.current.set(columnIndex, el);
+    else columnScrollRefs.current.delete(columnIndex);
+  }}
+  onScroll={(e) =>
+    syncScrollTop(e.currentTarget, e.currentTarget.scrollTop)
+  }
+>
                 }}
               >
                 {!isValid && (
@@ -1447,7 +1475,8 @@
       );
     }
 
-    ReactDOM.render(<BlueskyColumnFeed />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<BlueskyColumnFeed />);
   </script>
 </body>
 </html>
